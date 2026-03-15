@@ -6,7 +6,11 @@ import yfinance as yf
 import plotly.graph_objects as go
 import plotly.express as px
 import plotly.io as pio
+import os
 pio.templates.default = "plotly_dark"
+
+# --- local path ---
+base_path = os.path.dirname(os.path.abspath(__file__))
 
 # --- Ticker ---
 ASSETS = {
@@ -28,15 +32,17 @@ def get_stock_data(ticker):
 
     data = yf.Ticker(ticker)
 
-    # for ETF, if no trading day there is yahoo issue
+    # for ETF, if not a trading day, there is an yahoo issue
     # other tickers do not have that long an history
     # date is therefore shifted manually
+
     for i in range(0,4):
         df = data.history(interval="1d", period="max", end=dt.datetime.now()-pd.Timedelta(days=i), auto_adjust=True)
         if not df.empty: break
 
     # remove timezone
     df.index = df.index.tz_localize(None)
+
 
     return pd.DataFrame(df['Close'])
 
@@ -56,6 +62,18 @@ def get_gold_data(df_gold):
     df_merged = df_merged.resample('D').ffill()
 
     return df_merged
+
+def get_data_csv(filename):
+    # Pfad dynamisch zusammenbauen
+    file_path = os.path.join(base_path, filename)
+    try:
+        # Einlesen
+        df = pd.read_csv(file_path, parse_dates=['Date'], sep=',')
+        df.set_index('Date', inplace=True)
+        return pd.DataFrame(df['Close'])
+    except Exception as e:
+        st.error(f"Konnte {filename} nicht laden: {e}")
+        return pd.DataFrame()
 
 def calc_logReturn(df):
     logR = np.log(df / df.shift(1)).dropna()
@@ -981,14 +999,17 @@ def main():
     section_UI_setup()
 
     try:
-        df_welt = get_stock_data(ASSETS["Welt"]["ticker"])
-        df_wdi = get_stock_data(ASSETS["WDI"]["ticker"])
-        df_gold = get_gold_data(get_stock_data(ASSETS["Gold"]["ticker"]))
+        # df_welt = get_stock_data(ASSETS["Welt"]["ticker"])
+        # df_wdi = get_stock_data(ASSETS["WDI"]["ticker"])
+        # df_gold = get_gold_data(get_stock_data(ASSETS["Gold"]["ticker"]))
+
+        df_welt = get_data_csv('world_historical.csv')
+        df_gold = get_data_csv('gold_historical.csv')
+        df_wdi  = get_data_csv('wdi_historical.csv')
 
         if df_welt.empty or df_wdi.empty or df_gold.empty:
             st.error(f"Konnte nicht alle Daten laden. Bitte Seite neu laden.")
             st.stop()
-
 
         section_world_analysis(df_welt)
 
