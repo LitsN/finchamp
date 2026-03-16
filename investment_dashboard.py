@@ -340,6 +340,13 @@ def section_UI_heading():
             - Mit Reserve meinen wir einen Topf zum taktischen Investieren; nicht den privaten Notgroschen, z.B. für die kaputte Waschmaschine. 
             - Alle Angaben verstehen sich vor Steuern und vor Inflation.""")
 
+    st.warning("""
+            FinChamp e.V. ist ein gemeinnütziger Verein, der Finanzbildung in Schulen trägt. Wir sind 100% unabängig von der Finanz- und Versicherungsindustrie, verkaufen nichts und kassieren keine Provision.
+            
+            Wollen Sie mehr erfahren oder uns in Ihre Schulen holen? 
+               
+            Sie finden uns auf https://www.finchamp.de
+               """)
     st.write("""**Haftungsausschluss:** Historische Daten und Simulationen sind keine Garantie für zukünftige Entwicklungen. 
             Die hier gezeigten Charts und Berechnungen dienen der Bildung und Information, nicht der Anlageberatung. Wir übernehmen keine Haftung für Ihre persönlichen Investmententscheidungen.
     """)
@@ -1080,12 +1087,12 @@ def section_faq():
         """)
 
     st.success("""
-            Was ist wirklich **'smart'? Ein langweiliger Welt-ETF.** Das ist **intellektuell einfach**
+            Was ist wirklich **'smart'? Ein langweiliger Welt-ETF.** Das ist **intellektuell einfach**.
             Aber das **Umsetzen - vor allem diszipliniert Durchalten - ist schwer**.
             Zu viele Versuchungen begegnen uns täglich. Medien und FinFluencer verzerren die Fakten.
             Verkäufer wollen uns 'smartere' Dinge aufdrängen. In der Krise blickt man ängstlich ins Depot.
-            Aber die langfristige Erfolgswahrscheinlichkeit mit einem Welt-ETF steht zu unseren Gunsten.
-            Das ist Fakt. Und konnte hoffentlich mit dieser Seite vermittelt werden.
+            Aber die **langfristige Erfolgswahrscheinlichkeit mit einem Welt-ETF steht zu unseren Gunsten**.
+            Das ist Fakt und konnte hoffentlich mit dieser Seite vermittelt werden.
                """)
 def main():
     if 'var_First_Invest' not in st.session_state:
@@ -1120,22 +1127,22 @@ def main():
 
         with c2: section_gold_analysis(df_welt, df_gold)
 
-        gold_ratio, gold_cost = section_etf_gold_mix(df_welt, df_gold)
+        # gold_ratio, gold_cost = section_etf_gold_mix(df_welt, df_gold)
 
-        section_backtest_gold(df_welt, df_gold, gold_ratio, gold_cost)
+        # section_backtest_gold(df_welt, df_gold, gold_ratio, gold_cost)
 
-        section_manager_vs_etf(df_welt)
+        # section_manager_vs_etf(df_welt)
 
-        res_pct, dip_lim = section_btd_analysis(df_welt)
+        # res_pct, dip_lim = section_btd_analysis(df_welt)
 
-        with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
-            st.write("Moderne Risikoanalyse der 'smarten' Taktiken. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
+        # with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
+        #     st.write("Moderne Risikoanalyse der 'smarten' Taktiken. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
             
-            if st.button("Risikoanalysen starten"): 
-                section_backtest_btd(df_welt, res_pct, dip_lim)
-                section_monte_carlo(df_welt, res_pct, dip_lim)
+        #     if st.button("Risikoanalysen starten"): 
+        #         section_backtest_btd(df_welt, res_pct, dip_lim)
+        #         section_monte_carlo(df_welt, res_pct, dip_lim)
 
-        section_faq()
+        # section_faq()
 
 if __name__ == "__main__":
     main()
