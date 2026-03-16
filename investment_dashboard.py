@@ -296,7 +296,6 @@ def section_UI_heading():
             on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_side")
         )
 
-        st.markdown("<br>" * 2, unsafe_allow_html=True)
         st.image(qr_app_path, caption="finchamp.streamlit.app", width=150)
         st.image(qr_path, caption="www.finchamp.de", width=150)
         st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
