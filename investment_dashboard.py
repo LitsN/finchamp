@@ -4,8 +4,6 @@ import numpy as np
 import datetime as dt
 import yfinance as yf
 import plotly.graph_objects as go
-import plotly.express as px
-import plotly.io as pio
 import os
 
 # --- local path ---
@@ -35,51 +33,44 @@ def sync_widgets(target_key, source_key):
     
     st.session_state[other_side_key] = new_val
 
-@st.cache_data
-def get_stock_data(ticker):
-
-    data = yf.Ticker(ticker)
-
-    # for ETF, if not a trading day, there is an yahoo issue
-    # other tickers do not have that long an history
-    # date is therefore shifted manually
-
-    for i in range(0,4):
-        df = data.history(interval="1d", period="max", end=dt.datetime.now()-pd.Timedelta(days=i), auto_adjust=True)
-        if not df.empty: break
-
-    # remove timezone
-    df.index = df.index.tz_localize(None)
-    
-    df = df[df.index >= "1978-12-31"]
-    df['Close'].to_csv(f"{ticker}_newdata.csv", sep=';')
-
-    return pd.DataFrame(df['Close'])
-
-def get_csv_data(df_api, csv_label):
-
-    # merges the 
+@st.cache_data(ttl=3600)
+def get_stock_data(ticker, csv_label):
 
     file_path = os.path.join(base_path, csv_label)
 
+    # Load CSV historical data
     df_csv = pd.read_csv(file_path, sep=';', parse_dates=['Date'])
     df_csv.set_index('Date', inplace=True)
     df_csv.index = pd.to_datetime(df_csv.index)
     df_csv['Close'] = pd.to_numeric(df_csv['Close'], errors='coerce')
+
+    # Try t load newest ticker data
+    try:
+        data = yf.Ticker(ticker)
+
+        df_api = pd.DataFrame() # Initialisierung
+        df_api = data.history(interval="1d", period="max", end=dt.datetime.now() - pd.Timedelta('2days'), auto_adjust=True)
+   
+        if df_api.empty: raise ValueError("API lieferte keine Daten")
+        
+        df_api.index = pd.to_datetime(df_api.index)
+        df_api.index = df_api.index.tz_localize(None)
+
+        merge_date = df_api.index.min()
+
+        df_csv_pre = df_csv[df_csv.index < merge_date][['Close']].copy()
+        df = pd.concat([df_csv_pre, df_api[['Close']]])
+        df.sort_index(inplace=True)
+        
+        # Speichern der neuen Daten als Backup
+        # df_api['Close'].to_csv(f"{ticker}_newdata.csv", sep=';')
+
+    except:
+        df = df_csv[['Close']].copy()
     
-    df_api.index = df_api.index.tz_localize(None)
-    df_api.index = pd.to_datetime(df_api.index)
+    df = df[df.index >= "1978-12-31"]
 
-    merge_date = df_api.index.min()
-    df_csv_pre = df_csv[df_csv.index < merge_date][['Close']].copy()
-
-    df_merged = pd.concat([df_csv_pre, df_api[['Close']]])
-
-    df_merged.sort_index(inplace=True)
-    
-    df_merged = df_merged[df_merged.index >= "1978-12-31"]
-
-    return pd.DataFrame(df_merged['Close'])
+    return pd.DataFrame(df['Close'])
 
 def calc_logReturn(df):
     logR = np.log(df / df.shift(1)).dropna()
@@ -270,16 +261,9 @@ def section_UI_heading():
     # --- Intro Text ---
     logo_path = os.path.join(base_path, 'logo.png')
     qr_path = os.path.join(base_path, 'qr_code.png')
+
     st.set_page_config(page_title="FinChamp - Welt-ETF kannst du selbst", layout="wide")
 
-    st.markdown(
-        f"""
-        <div style="display: flex; justify-content: center;">
-            <img src="{logo_path}" width="200" alt="FinChamp e.V. Logo">
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
     st.title("Die Kunst des klugen Investierens: Das Weltportfolio")
     
     st.write("""**Gute Investoren sind gute Risikomanager.** Das Credo dieser Seite ist deshalb so banal wie robust: Privatanleger interessiert, 
@@ -287,6 +271,7 @@ def section_UI_heading():
     
     st.write(f"""
             Darauf ist diese Seite ausgerichtet. Sie zeigt, warum ein einfacher Welt-ETF solide Rendite bringt und gleichzeitig viele Anlagerisiken inhärent reduziert.
+            
             Zur Analyse legen wir zuerst unsere **erste Investition** und die **monatliche Sparrate** fest. *Alle Berechnungen und Charts aktualisieren automatisch*.
             """)
     with st.sidebar:
@@ -301,7 +286,7 @@ def section_UI_heading():
             on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_side")
         )
 
-        st.markdown("<br>" * 10, unsafe_allow_html=True)
+        st.markdown("<br>" * 3, unsafe_allow_html=True)
         st.image(qr_path, caption="www.finchamp.de", width=150)
         st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
 
@@ -1072,15 +1057,18 @@ def main():
 
     section_UI_heading()
 
-    try:
-        df_welt = get_csv_data(get_stock_data(ASSETS["Welt"]["ticker"]), 'world_historical.csv')
-        df_welt = get_stock_data(ASSETS["Welt"]["ticker"])
-        df_wdi = get_csv_data(get_stock_data(ASSETS["WDI"]["ticker"]), 'wdi_historical.csv')     
-        df_gold = get_csv_data(get_csv_data(get_stock_data(ASSETS["Gold"]["ticker"]), 'gold_historical.csv'), 'gold_historical_before.csv')
+    df_welt = get_stock_data(ASSETS["Welt"]["ticker"], 'world_historical.csv')
+    df_wdi = get_stock_data(ASSETS["WDI"]["ticker"], 'wdi_historical.csv')     
+    df_gold = get_stock_data(ASSETS["Gold"]["ticker"], 'gold_historical.csv')
 
-        if df_welt.empty or df_wdi.empty or df_gold.empty:
-            st.error(f"Konnte nicht alle Daten laden. Bitte Seite neu laden.")
-            st.stop()
+    if df_welt.empty or df_wdi.empty or df_gold.empty:
+        st.error(f"Konnte nicht alle Daten laden. Bitte Seite neu laden.")
+        st.stop()
+
+    else:
+        first_update = df_welt.index.min().strftime('%d.%m.%Y')
+        last_update = df_welt.index.max().strftime('%d.%m.%Y')
+        st.sidebar.caption(f"Daten von: {first_update} - {last_update}")
 
         section_world_analysis(df_welt)
 
@@ -1100,10 +1088,6 @@ def main():
         section_backtest_btd(df_welt, res_pct, dip_lim)
 
         section_monte_carlo(df_welt, res_pct, dip_lim)
-
-    except Exception as e:
-        st.error(f"Fehler beim Datenabruf: {e}")
-        st.stop()
 
 if __name__ == "__main__":
     main()
