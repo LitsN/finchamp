@@ -7,25 +7,33 @@ import plotly.graph_objects as go
 import plotly.express as px
 import plotly.io as pio
 import os
-pio.templates.default = "plotly_dark"
 
 # --- local path ---
 base_path = os.path.dirname(os.path.abspath(__file__))
 
 # --- Ticker ---
 ASSETS = {
-    "Welt":{'ticker': '^990100-USD-STRD', 'start': '1985-01-02'},
-    "WDI":{'ticker': 'WDI.HM', 'start': '2017-10-01'},
-    "Gold":{'ticker': 'GC=F', 'start': '2017-10-01'}
+    "Welt":{'ticker': '^990100-USD-STRD'},
+    "WDI":{'ticker': 'WDI.HM'},
+    "Gold":{'ticker': 'GC=F'}
 }
-
-# --- Sidebar ---
-st.sidebar.header("Investitionen")
-var_First_Invest = st.sidebar.number_input("Start Investition (€)", value=1000)
-var_Frequent_Invest = st.sidebar.number_input("Monatliche Investition (€)", value=50)
 
 def format_de(n):
     return f"{n:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def sync_widgets(target_key, source_key):
+
+    # syncing of changes in shared variables
+
+    new_val = st.session_state[source_key]
+    st.session_state[target_key] = new_val
+    
+    if "_main" in source_key:
+        other_side_key = source_key.replace("_main", "_side")
+    else:
+        other_side_key = source_key.replace("_side", "_main")
+    
+    st.session_state[other_side_key] = new_val
 
 @st.cache_data
 def get_stock_data(ticker):
@@ -42,42 +50,61 @@ def get_stock_data(ticker):
 
     # remove timezone
     df.index = df.index.tz_localize(None)
-
+    
+    df = df[df.index >= "1978-12-31"]
+    df['Close'].to_csv(f"{ticker}_newdata.csv", sep=';')
 
     return pd.DataFrame(df['Close'])
 
-def get_gold_data(df_gold):
+def get_csv_data(df_api, csv_label):
 
-    df_csv = pd.read_csv('gold_historical.csv', sep=';', parse_dates=['Date'])
+    # merges the 
+
+    file_path = os.path.join(base_path, csv_label)
+
+    df_csv = pd.read_csv(file_path, sep=';', parse_dates=['Date'])
     df_csv.set_index('Date', inplace=True)
-
-    merge_date = df_gold.index.min()
+    df_csv.index = pd.to_datetime(df_csv.index)
+    df_csv['Close'] = pd.to_numeric(df_csv['Close'], errors='coerce')
     
-    df_csv_pre = df_csv[df_csv.index < merge_date].copy()
+    df_api.index = df_api.index.tz_localize(None)
+    df_api.index = pd.to_datetime(df_api.index)
 
-    df_merged = pd.concat([df_csv_pre, df_gold])
+    merge_date = df_api.index.min()
+    df_csv_pre = df_csv[df_csv.index < merge_date][['Close']].copy()
+
+    df_merged = pd.concat([df_csv_pre, df_api[['Close']]])
 
     df_merged.sort_index(inplace=True)
+    
+    df_merged = df_merged[df_merged.index >= "1978-12-31"]
 
-    df_merged = df_merged.resample('D').ffill()
-
-    return df_merged
-
-def get_data_csv(filename):
-    # Pfad dynamisch zusammenbauen
-    file_path = os.path.join(base_path, filename)
-    try:
-        # Einlesen
-        df = pd.read_csv(file_path, parse_dates=['Date'], sep=',')
-        df.set_index('Date', inplace=True)
-        return pd.DataFrame(df['Close'])
-    except Exception as e:
-        st.error(f"Konnte {filename} nicht laden: {e}")
-        return pd.DataFrame()
+    return pd.DataFrame(df_merged['Close'])
 
 def calc_logReturn(df):
     logR = np.log(df / df.shift(1)).dropna()
     return logR
+
+def calc_merged_df(df_base, df_strategy):
+    # 1. Series extrahieren
+    s_base = df_base.iloc[:, 0] if isinstance(df_base, pd.DataFrame) else df_base
+    s_strategy = df_strategy.iloc[:, 0] if isinstance(df_strategy, pd.DataFrame) else df_strategy
+    
+    # 2. Merge (Suffixe nur intern, damit Spalten eindeutig sind)
+    df_sync = pd.merge( pd.DataFrame({'Close': s_base}), pd.DataFrame({'Close': s_strategy}), 
+        left_index=True, right_index=True, how='outer',  suffixes=('_base', '_strategy'))
+
+    # 3. Bereinigen
+    df_sync.sort_index(inplace=True)
+    df_sync.ffill(inplace=True)
+    df_sync.dropna(inplace=True)
+
+    # 4. Log-Returns berechnen
+    # Wir greifen einfach über die Position (iloc) zu, dann sind Namen völlig egal
+    logR_base = calc_logReturn(df_sync[['Close_base']].rename(columns={'Close_base': 'Close'}))
+    logR_strategy = calc_logReturn(df_sync[['Close_strategy']].rename(columns={'Close_strategy': 'Close'}))
+
+    return logR_base, logR_strategy, df_sync.index[1:]
 
 def calc_historical_df(logR, var_First_Invest, var_Frequent_Invest):
     # regular investments are compounded in reverse
@@ -107,7 +134,7 @@ def calc_historical_df(logR, var_First_Invest, var_Frequent_Invest):
     return path_start_invest + path_savings
 
 def calc_invest_df(logR, var_First_Invest, var_Frequent_Invest):
-
+    
     # cumulation of all investments
 
     arr_invest = np.zeros(len(logR))
@@ -147,34 +174,10 @@ def calc_compound_end_value(logR_raw, months_raw, start_inv, cont_inv):
     
     return compound_start_inv + final_savings_val
 
-def calc_risk_metrics(logR):
-    
-    # calculates longest duration and loss of a drawdown
-    # basis are log returns
-
-    cum_returns = logR.cumsum()
-    running_max = np.maximum.accumulate(cum_returns)
-    drawdowns = cum_returns - running_max
-    max_drawdown_pct = (np.exp(drawdowns.min().iloc[0]) - 1) * 100
-    is_in_drawdown = drawdowns < 0
-    max_duration = 0
-    current_duration = 0
-
-    for in_drawdown in is_in_drawdown.values:
-        if in_drawdown:
-            current_duration += 1
-        else:
-            max_duration = max(max_duration, current_duration)
-            current_duration = 0
-
-    max_duration = max(max_duration, current_duration)
-            
-    return max_drawdown_pct, max_duration
-
 def calc_btd(logR, close_prices, tAxis, start_val, monthly_val, res_pct, dip_limit_dec):
     # convert to np
     logR_raw = logR.values
-    prices_raw = close_prices.values
+    #prices_raw = close_prices.values
     months = tAxis.month.values
     tAxis_raw = tAxis.values 
 
@@ -263,16 +266,63 @@ def plot_charts(tAxis, title, df_invest, df_base, df_base_label, df_strategy=Non
     
     return fig
 
-def section_UI_setup():
-    # --- UI Setup ---
+def section_UI_heading():
+    # --- Intro Text ---
+    logo_path = os.path.join(base_path, 'logo.png')
+    qr_path = os.path.join(base_path, 'qr_code.png')
     st.set_page_config(page_title="FinChamp - Welt-ETF kannst du selbst", layout="wide")
+
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: center;">
+            <img src="{logo_path}" width="200" alt="FinChamp e.V. Logo">
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
     st.title("Die Kunst des klugen Investierens: Das Weltportfolio")
-
-    st.write("""**Gute Investoren sind gute Risikomanager.** Das Credo dieser Seite ist deshalb so banal wie robust: Privatanleger interessiert, ob sie am Ende wahrscheinlich **mehr oder weniger Geld im Portemonnaie** haben.""")
-
+    
+    st.write("""**Gute Investoren sind gute Risikomanager.** Das Credo dieser Seite ist deshalb so banal wie robust: Privatanleger interessiert, 
+             ob sie am Ende wahrscheinlich **mehr oder weniger Geld im Portemonnaie** haben.""")
+    
     st.write(f"""
             Darauf ist diese Seite ausgerichtet. Sie zeigt, warum ein einfacher Welt-ETF solide Rendite bringt und gleichzeitig viele Anlagerisiken inhärent reduziert.
+            Zur Analyse legen wir zuerst unsere **erste Investition** und die **monatliche Sparrate** fest. *Alle Berechnungen und Charts aktualisieren automatisch*.
+            """)
+    with st.sidebar:
+        st.image(logo_path, width=200)
+        st.header("Investitionen")
+        st.number_input("Start Investition (€)",  key="var_First_Invest_side", 
+            min_value=0, step=250,
+            on_change=sync_widgets, args=("var_First_Invest", "var_First_Invest_side")
+        )
+        st.number_input("Monatliche Sparrate (€)", key="var_Frequent_Invest_side", 
+            min_value=0, step=100,
+            on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_side")
+        )
 
+        st.markdown("<br>" * 10, unsafe_allow_html=True)
+        st.image(qr_path, caption="www.finchamp.de", width=150)
+        st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
+
+    with st.expander("Investitionen", expanded=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.number_input("Start Investition (€)", key="var_First_Invest_main", 
+                min_value=0, step=250,
+                on_change=sync_widgets, args=("var_First_Invest", "var_First_Invest_main")
+            )
+            
+        with col2:
+            st.number_input("Monatliche Sparrate (€)", key="var_Frequent_Invest_main", 
+                min_value=0, step=100, 
+                on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_main"),
+            )
+    
+    
+
+    st.write(f"""
             Außerdem wollen wir eine Lücke schließen: Die üblichen Informationsseiten und Blogs über die ETF-Anlage zeigen weder eine geschlossene Darstellung noch eine interaktive (z.B. wie bei Zinsrechnern).
             Meist wird nur behauptet, ohne sich um eine Nachweisführung zu bemühen. Schon gar nicht wird modernes Risikomanagement adressiert.
             Gleichzeitig taugen akademische Kennzahlen für Privatanwender wiederum auch nicht, weil sie recht unverständlich sind. 
@@ -300,35 +350,54 @@ def section_UI_setup():
     """)
 def section_world_analysis(df):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.subheader("Der langfristige Erfolg mit einem Welt-ETF")
 
     # --- Section Data ---
     logR = calc_logReturn(df)
-    
     df_base = calc_historical_df(logR, var_First_Invest, var_Frequent_Invest)
-    tAxis = df.index[1:]
-    
     df_invest = calc_invest_df(logR, var_First_Invest, var_Frequent_Invest)
 
+    tAxis = df.index[1:]
+    
     # --- KPI Calculation ---
     final_value = df_base[-1]
     total_paid = df_invest[-1]
     profit = final_value - total_paid
 
-    daily_mean_return = (np.exp(logR.mean().iloc[0]) - 1) * 100
-    daily_win_chance = (len(logR[logR.iloc[:, 0] > 0]) / len(logR)) * 100
+    ## Geometrische Rendite
+    daily_mean_return = (np.exp(logR.mean().iloc[0] * 252) - 1) * 100
+    daily_win_chance = (1 - len(logR[logR.iloc[:, 0] < 0]) / len(logR)) * 100
 
-    ## --- Drawdown Calculation ---
-    max_dd, max_dur = calc_risk_metrics(logR)
-    diff_to_investment = np.array(df_base) - np.array(df_invest)
-    negative_diffs = diff_to_investment[diff_to_investment < 0]
-    if len(negative_diffs) > 0:
-        rel_loss = (diff_to_investment / df_invest)
-        max_nominal_loss_pct = rel_loss.min() * 100
-        duration_below_investment = np.sum(diff_to_investment < 0)
+    ## --- Drawdown ATH Calculation ---
+    cum_logR = logR.cumsum()
+    running_max = cum_logR.cummax()
+    dd_ath = cum_logR - running_max
+    max_dd_ath = (np.exp(dd_ath.min().iloc[0]) - 1) * 100
+    is_in_dd_ath = dd_ath < 0
+    if is_in_dd_ath.any(axis=None):
+        streak_dd_ath = (is_in_dd_ath != is_in_dd_ath.shift()).cumsum()
+        max_dd_dur_ath = streak_dd_ath[is_in_dd_ath].value_counts().max()
     else:
-        max_nominal_loss_pct = 0
-        duration_below_investment = 0
+        max_dd_dur_ath = 0
+
+    ## ---  Drawdown Invest Calculation ---
+    df_comparison = pd.DataFrame({'base': df_base.flatten(), 'invested': df_invest.flatten()}, index=tAxis)
+    df_comparison['diff'] = df_comparison['base'] - df_comparison['invested']
+
+    ## Filter to avoid noise
+    negative_mask = (df_comparison['base'] / df_comparison['invested'] - 1) < -0.01
+    
+    if negative_mask.any():
+        # Nur die wirklich negativen Zeilen betrachten
+        rel_loss = df_comparison['diff'] / df_comparison['invested']
+        max_dd_invest = rel_loss.min() * 100
+        group_id = (negative_mask != negative_mask.shift()).cumsum()
+        max_dd_dur_invest = group_id[negative_mask].value_counts().max()
+    else:
+        max_dd_invest = 0
+        max_dd_dur_invest = 0
 
     # --- KPI Plot ---
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -339,13 +408,14 @@ def section_world_analysis(df):
 
     c3.metric("Gewinn/Verlust", f"{format_de(profit)} €", delta=f"{((final_value/total_paid)-1)*100:.2f}%")
 
-    c4.metric("Längste Durststrecke des Index", f"{max_dur} Tage",  delta=f"{max_dd:.1f} %", 
+    c4.metric("Längste Verlustdauer des Index", f"{max_dd_dur_ath} Tage",  delta=f"{max_dd_ath:.1f} %", 
                 help="Die maximale Zeit und der theoretische Verlust **des Index** nach einem Crash.")
     
-    c5.metric("Größte Kapitalverlust", f"{duration_below_investment} Tage", delta=f"{max_nominal_loss_pct:.1f} %", 
-                help="Die maximale Zeit und der theoretische Verlust, wo das Vermögen **unter deine Einzahlungen** gefallen ist")
+    c5.metric("Längste Kapitalverlust", f"{max_dd_dur_invest} Tage", delta=f"{max_dd_invest:.1f} %", 
+                help="Die maximale Zeit und der theoretische Verlust, wo das Vermögen **unter deine Einzahlungen** gefallen ist." \
+                " Typischerweise ganz am Anfang der Investition in einen Welt-ETF")
     
-    c6.metric("Tägliche Gewinnchance", f"{daily_win_chance:.1f} %", delta=f"Ø {daily_mean_return:+.2f} % Rendite täglich",
+    c6.metric("Gewinnchance", f"{daily_win_chance:.1f} %", delta=f"Ø {daily_mean_return:+.1f} % Rendite p.a.",
             help=f"Steigt oder fällt unser investiertes Vermögen häufiger?")
 
     # --- Chart Plot ---
@@ -362,11 +432,13 @@ def section_world_analysis(df):
 
 def section_manager_vs_etf(df):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.write("---")
     st.subheader("Sollten wir auf den Dr. Manager vertrauen?")
     st.write("""
              Fondsverkäufer behaupten gerne, ein promovierter Manager würde mit seinen ausgefeilten Methoden, Algorithmen
-              und Hochleistungsrechnern bessere Ergebnisse erzielen. Das koste uns **'nur' in etwa 2% jährlich**. 
+              und Hochleistungsrechnern bessere Ergebnisse erzielen. Das koste uns **'nur' in etwa 2% jährlich** bei sonst gleicher Anlageperformance? 
              Was bedeutet das für unser Endvermögen?
             """)
     
@@ -374,8 +446,8 @@ def section_manager_vs_etf(df):
     logR_base = calc_logReturn(df)
     tAxis = df.index[1:]
 
-    daily_costs = np.log(1.02) / 252
-    logR_fonds = logR_base - daily_costs
+    daily_costs = np.log(1 - 0.02) / 252
+    logR_fonds = logR_base + daily_costs
 
     df_base = calc_historical_df(logR_base, var_First_Invest, var_Frequent_Invest)
     df_fonds = calc_historical_df(logR_fonds, var_First_Invest, var_Frequent_Invest)
@@ -431,30 +503,24 @@ def section_manager_vs_etf(df):
 
 def section_wirecard_analysis(df_welt, df_wdi):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.write("---")
     st.subheader("Einzelaktie WireCard")
 
     # --- Section Data ---
+
     df_welt = df_welt.loc["2017-10-01":].copy()
 
-    df_wdi = df_wdi.iloc[:, 0] if isinstance(df_wdi, pd.DataFrame) else df_wdi
-    df_base = df_welt.iloc[:, 0] if isinstance(df_welt, pd.DataFrame) else df_welt
-    df_sync = pd.merge(pd.DataFrame({'Close': df_wdi}), pd.DataFrame({'Close': df_base}), 
-                        left_index=True, right_index=True, how='inner', suffixes=('_wdi', '_world'))
-    
-    df_wdi = df_sync[['Close_wdi']].rename(columns={'Close_wdi': 'Close'})
-    df_base = df_sync[['Close_world']].rename(columns={'Close_world': 'Close'})
-
-    logR_wdi = calc_logReturn(df_wdi)
-    logR_base = calc_logReturn(df_base)
+    # sync df  and calculate log returns
+    logR_base, logR_wdi, tAxis = calc_merged_df(df_welt, df_wdi)
     
     df_invest = calc_invest_df(logR_base, var_First_Invest, var_Frequent_Invest)
     df_base = calc_historical_df(logR_base, var_First_Invest, var_Frequent_Invest)
     df_wdi = calc_historical_df(logR_wdi, var_First_Invest, var_Frequent_Invest)
 
     # there is noise in the stock data, thus stock clamped at delisting date
-    tAxis = df_sync.index[1:]
-    df_wdi[df_sync.index[1:] >= pd.Timestamp("2020-06-25")] = 0
+    df_wdi[tAxis >= pd.Timestamp("2020-06-25")] = 0
 
     # --- KPI Calculation ---
     # none
@@ -491,20 +557,15 @@ def section_wirecard_analysis(df_welt, df_wdi):
 
 def section_gold_analysis(df_base, df_gold):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.write("---")
     st.subheader("Einzeltitel Gold")
 
     # --- Section Data ---
-    df_gold_clean = df_gold.iloc[:, 0] if isinstance(df_gold, pd.DataFrame) else df_gold
-    df_base_clean = df_base.iloc[:, 0] if isinstance(df_base, pd.DataFrame) else df_base
-    
-    df_sync = pd.merge(pd.DataFrame({'Close': df_gold_clean}), pd.DataFrame({'Close': df_base_clean}), 
-                        left_index=True, right_index=True, how='inner', suffixes=('_gold', '_world'))
-    
-    logR_gold_all = calc_logReturn(df_sync[['Close_gold']].rename(columns={'Close_gold': 'Close'}))
-    logR_base_all = calc_logReturn(df_sync[['Close_world']].rename(columns={'Close_world': 'Close'}))
-    
-    tAxis_all = df_sync.index[1:]
+
+    # sync df  and calculate log returns
+    logR_base_all, logR_gold_all, tAxis_all = calc_merged_df(df_base, df_gold)
 
     ## --- Time Slices ---
     view = st.radio("Wie sieht es bei Gold aus?", ["Rohrkrepierer", "Trauminvestment", "Langfristig"], horizontal=True)
@@ -517,12 +578,13 @@ def section_gold_analysis(df_base, df_gold):
         mask = slice(None) # Wählt alles aus
 
     tAxis_final = tAxis_all[mask]
+
     logR_gold_final = logR_gold_all[mask]
     logR_base_final = logR_base_all[mask]
 
-    df_gold_path = calc_historical_df(logR_gold_final, var_First_Invest, var_Frequent_Invest)
-    df_base_path = calc_historical_df(logR_base_final, var_First_Invest, var_Frequent_Invest)
-    df_invest_path = calc_invest_df(logR_gold_final, var_First_Invest, var_Frequent_Invest)
+    df_gold = calc_historical_df(logR_gold_final, var_First_Invest, var_Frequent_Invest)
+    df_base = calc_historical_df(logR_base_final, var_First_Invest, var_Frequent_Invest)
+    df_invest = calc_invest_df(logR_gold_final, var_First_Invest, var_Frequent_Invest)
 
     # --- KPI Calculation ---
     # none
@@ -531,8 +593,8 @@ def section_gold_analysis(df_base, df_gold):
     # none
 
     # --- Chart Plot ---
-    fig_gold = plot_charts(tAxis_final, f'100% Welt-ETF vs. 100% Gold ({view})', df_invest_path, 
-                           df_base_path, 'Welt-ETF', df_gold_path, '#f1c40f', 'Gold')
+    fig_gold = plot_charts(tAxis_final, f'100% Welt-ETF vs. 100% Gold ({view})', df_invest, 
+                           df_base, 'Welt-ETF', df_gold, '#f1c40f', 'Gold')
     
     st.plotly_chart(fig_gold, width='stretch', key="chart_gold")
 
@@ -556,6 +618,8 @@ def section_gold_analysis(df_base, df_gold):
 
 def section_etf_gold_mix(df_base, df_gold):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     gold_cost = 0.005
     st.write("---")
     st.subheader("Diversifikation verbessern: Gold ins Welt-Depot!")
@@ -573,16 +637,12 @@ def section_etf_gold_mix(df_base, df_gold):
     etf_ratio = 1.0 - gold_ratio
 
     # --- Section Data ---
-    df_sync = pd.merge(pd.DataFrame({'Close': df_gold.iloc[:,0]}), 
-                        pd.DataFrame({'Close': df_base.iloc[:,0]}), 
-                        left_index=True, right_index=True, how='inner', suffixes=('_gold', '_world'))
-    
-    logR_gold = calc_logReturn(df_sync[['Close_gold']].rename(columns={'Close_gold': 'Close'}))
-    logR_gold += np.log(1 - gold_cost)/252
-    logR_world = calc_logReturn(df_sync[['Close_world']].rename(columns={'Close_world': 'Close'}))
-    
-    tAxis = df_sync.index[1:]
 
+    # sync df  and calculate log returns
+    logR_world, logR_gold, tAxis = calc_merged_df(df_base, df_gold)
+    
+    # portfolio log return
+    logR_gold += np.log(1 - 0.005)/252
     logR_portfolio = (logR_gold * gold_ratio) + (logR_world * etf_ratio)
 
     df_strategy = calc_historical_df(logR_portfolio, var_First_Invest, var_Frequent_Invest)
@@ -600,8 +660,8 @@ def section_etf_gold_mix(df_base, df_gold):
     c1, c2, c3, c4 = st.columns(4)
     
     c1.metric("Anteil Gold", f"{gold_pct} %")
-    c2.metric("Endvermögen Mix", f"{format_de(final_mix)} €")
-    c3.metric("Endvermögen 100% ETF", f"{format_de(final_pure)} €")
+    c2.metric("Endvermögen ohne Gold", f"{format_de(final_pure)} €")
+    c3.metric("Endvermögen mit Gold", f"{format_de(final_mix)} €")
     c4.metric("Unterschied", f"{format_de(diff_euro)} €", delta=f"{diff_pct:.1f} %")
 
     # --- Chart Plot ---
@@ -628,9 +688,9 @@ def section_etf_gold_mix(df_base, df_gold):
                - Oder schützt Gold vor nicht-finanziellen Risiken: soziopolitische Krisen, Währungskrisen, Tauschgeschäfte?
     """)
     
-    return gold_ratio
+    return gold_ratio, gold_cost
 
-def section_backtest_gold(df_base, df_gold, gold_ratio):
+def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
     # --- Section Header ---
     st.subheader("Risikoanalyse: Wie hätte sich die Goldbeimischung in der echten Welt geschlagen?")
     st.write(f"Wir testen, wie sich ein Portfolio mit **{gold_ratio*100:.0f}% Gold** im Vergleich zum reinen Welt-ETF über hunderte historische Zeiträume geschlagen hat:")
@@ -638,15 +698,12 @@ def section_backtest_gold(df_base, df_gold, gold_ratio):
     st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Median) und **wie oft** 'mit Gold' besser war als 'ohne Gold':")
     
     # --- Section Data ---
-    df_sync = pd.merge(pd.DataFrame({'Close': df_gold.iloc[:,0]}), pd.DataFrame({'Close': df_base.iloc[:,0]}), 
-                        left_index=True, right_index=True, how='inner', suffixes=('_gold', '_world'))
+    # sync df  and calculate log returns, values for BT
+    logR_world, logR_gold, _ = calc_merged_df(df_base, df_gold)
+    logR_world = logR_world.values
+    logR_gold += np.log(1 - gold_cost)/252
+    logR_gold = logR_gold.values
     
-    logR_gold_raw = calc_logReturn(df_sync[['Close_gold']].rename(columns={'Close_gold': 'Close'})).values
-    logR_world = calc_logReturn(df_sync[['Close_world']].rename(columns={'Close_world': 'Close'})).values
-    
-    # Lagerkosten Gold abziehen (0.5% p.a. -> täglicher Abzug)
-    logR_gold = logR_gold_raw - np.log(1 - 0.005)/252
-
     # year slices
     years_to_test = [1, 3, 5, 10, 20]
 
@@ -659,7 +716,7 @@ def section_backtest_gold(df_base, df_gold, gold_ratio):
     # iterate through the slices 
     for idx, y in enumerate(years_to_test):
         window_size = y * 252
-        step = 21 # Einmal pro Monat (Börsenmonat) ansetzen
+        step = 21
         
         results_diffs = [] 
         start_indices = range(0, len(logR_world) - window_size, step)
@@ -690,16 +747,17 @@ def section_backtest_gold(df_base, df_gold, gold_ratio):
             if results_diffs:
                 # --- KPI Calculation ---
                 wins = [d for d in results_diffs if d > 0]
-                win_rate = (len(wins) / len(results_diffs)) * 100
+                lose_rate = (1 - len(wins) / len(results_diffs)) * 100
                 median_perf = np.median(results_diffs)
                 
                 # --- KPI Plot ---
                 cols[idx].metric(
                     label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
                     value=f"{median_perf:+.1f} %",
-                    delta=f"Gold-Anteil war in {win_rate:.0f}% besser",
-                    delta_color="normal" if win_rate > 50 else "inverse"
+                    delta=f"Mit Gold war in {lose_rate:.0f} % schlechter",
+                    delta_color="inverse" if lose_rate > 50 else "normal"
                 )
+
         else:
             cols[idx].write(f"{y}J: Zu wenig Daten")
     
@@ -711,6 +769,8 @@ def section_backtest_gold(df_base, df_gold, gold_ratio):
 
 def section_btd_analysis(df):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.write("---")
     st.subheader("Smart Investieren? Günstige Gelegenheiten abpassen")
     
@@ -745,25 +805,25 @@ def section_btd_analysis(df):
     df_base = calc_historical_df(logR, var_First_Invest, var_Frequent_Invest)
     
     # --- KPI Calculation ---
-    final_100 = df_base[-1]
+    final_base = df_base[-1]
     final_btd = df_btd[-1]
 
     df_invest = calc_invest_df(logR, var_First_Invest, var_Frequent_Invest)
     total_paid = df_invest[-1]
     
-    profit_100 = final_100 - total_paid
+    profit_base = final_base - total_paid
     profit_btd = final_btd - total_paid
-    diff_euro = final_btd - final_100
-    diff_pct = (final_btd / final_100 - 1) * 100
-    diff = df_btd[-1] - df_base[-1]
+    diff_euro = final_btd - final_base
+    diff_pct = (final_btd / final_base - 1) * 100
+    diff = final_btd - final_base
 
     # --- KPI Plot ---
     c1, c2, c3, c4, c5 = st.columns(5)
     
     c1.metric("Gesamt investiert", f"{format_de(total_paid)} €")
     
-    c2.metric("Endvermögen stumpf", f"{format_de(final_100)} €", 
-                delta=f"{format_de(profit_100)} € Gewinn")
+    c2.metric("Endvermögen stumpf", f"{format_de(final_base)} €", 
+                delta=f"{format_de(profit_base)} € Gewinn")
     
     c3.metric("Endvermögen smart", f"{format_de(final_btd)} €", 
                 delta=f"{format_de(profit_btd)} € Gewinn")
@@ -809,6 +869,8 @@ def section_btd_analysis(df):
 
 def section_backtest_btd(df_full, res_pct, dip_limit_dec):
     # --- Section Header ---
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.write("---")
     st.subheader("Risikoanalyse: Wie schlug sich 'smart' in der echten Welt?")
     st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Median) und **wie oft** 'smart' besser als 'stumpf' war:")
@@ -849,13 +911,13 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
                 s_dates = all_dates[start_idx:end_idx]
                 
 
-                df_base = calc_compound_end_value(s_logR, s_months, var_First_Invest, var_Frequent_Invest)
+                df_base_final = calc_compound_end_value(s_logR, s_months, var_First_Invest, var_Frequent_Invest)
                 
                 df_smart, _, _ = calc_btd(pd.Series(s_logR), pd.Series(s_prices), s_dates, 
                                           var_First_Invest, var_Frequent_Invest, res_pct, dip_limit_dec)
                 
                 # perforamnce difference
-                diff_pct = (df_smart[-1] / df_base - 1) * 100
+                diff_pct = (df_smart[-1] / df_base_final - 1) * 100
                 results_diffs.append(diff_pct)
 
                 # progress update 
@@ -867,15 +929,15 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
             if results_diffs:
                 # --- KPI Calculation ---
                 wins = [d for d in results_diffs if d > 0]
-                win_rate = (len(wins) / len(results_diffs)) * 100
+                lose_rate = (1- len(wins) / len(results_diffs)) * 100
                 median_perf = np.median(results_diffs)
                 
                 # --- KPI Plot ---
                 cols[idx].metric(
                     label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
                     value=f"{median_perf:+.1f} %",
-                    delta=f"In {win_rate:.0f}% der Zeiträume war 'smart' besser",
-                    delta_color="normal" if win_rate > 50 else "inverse"
+                    delta=f"In {lose_rate:.0f}% der Zeiträume war 'smart' schlechter",
+                    delta_color="inverse" if lose_rate > 50 else "normal"
                 )
         else:
             cols[idx].write(f"{y}J: Zu wenig Daten")
@@ -895,8 +957,11 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
 
 def section_monte_carlo(df, reserve_pct, dip_limit_dec):
     # --- Section Header ---
-    n_sims = 500 
+    n_sims = 250 
     years_to_test = [1, 3, 5, 10, 20]
+    var_First_Invest = st.session_state.var_First_Invest
+    var_Frequent_Invest = st.session_state.var_Frequent_Invest
+
     st.write("---")
     st.subheader("Risikoanalyse: Wie schlägt sich 'smart' in Paralleluniversen?") 
     st.write(f"Anstatt der historischen Daten erzeugen wir {format_de(n_sims * len(years_to_test))} gänzlich andere Kurse und vergleichen, um **wie viel** (im Median) und **wie oft** 'smart' gegen 'stumpf' gewinnt:")
@@ -975,15 +1040,15 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
         if results_diffs:
             # --- KPI Calculation ---
             wins = [d for d in results_diffs if d > 0]
-            win_rate = (len(wins) / n_sims) * 100
+            lose_rate = (1- (len(wins) / n_sims)) * 100
             median_perf = np.median(results_diffs)
             
             # --- KPI Plot ---
             cols[idx].metric(
                 label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
                 value=f"{median_perf:+.1f} %",
-                delta=f"In {win_rate:.0f}% der Universen war 'smart' besser",
-                delta_color="normal" if win_rate > 50 else "inverse"
+                delta=f"In {lose_rate:.0f}% der Universen war 'smart' schlechter",
+                delta_color="inverse" if lose_rate > 50 else "normal"
             )
 
     progress_bar.empty()
@@ -995,17 +1060,23 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
         """)
     
 def main():
+    if 'var_First_Invest' not in st.session_state:
+        st.session_state['var_First_Invest'] = 1000
+        st.session_state['var_First_Invest_side'] = 1000
+        st.session_state['var_First_Invest_main'] = 1000
 
-    section_UI_setup()
+    if 'var_Frequent_Invest' not in st.session_state:
+        st.session_state['var_Frequent_Invest'] = 50
+        st.session_state['var_Frequent_Invest_side'] = 50
+        st.session_state['var_Frequent_Invest_main'] = 50
+
+    section_UI_heading()
 
     try:
-        # df_welt = get_stock_data(ASSETS["Welt"]["ticker"])
-        # df_wdi = get_stock_data(ASSETS["WDI"]["ticker"])
-        # df_gold = get_gold_data(get_stock_data(ASSETS["Gold"]["ticker"]))
-
-        df_welt = get_data_csv('world_historical.csv')
-        df_gold = get_data_csv('gold_historical.csv')
-        df_wdi  = get_data_csv('wdi_historical.csv')
+        df_welt = get_csv_data(get_stock_data(ASSETS["Welt"]["ticker"]), 'world_historical.csv')
+        df_welt = get_stock_data(ASSETS["Welt"]["ticker"])
+        df_wdi = get_csv_data(get_stock_data(ASSETS["WDI"]["ticker"]), 'wdi_historical.csv')     
+        df_gold = get_csv_data(get_csv_data(get_stock_data(ASSETS["Gold"]["ticker"]), 'gold_historical.csv'), 'gold_historical_before.csv')
 
         if df_welt.empty or df_wdi.empty or df_gold.empty:
             st.error(f"Konnte nicht alle Daten laden. Bitte Seite neu laden.")
@@ -1018,9 +1089,9 @@ def main():
 
         with c2: section_gold_analysis(df_welt, df_gold)
 
-        gold_ratio = section_etf_gold_mix(df_welt, df_gold)
+        gold_ratio, gold_cost = section_etf_gold_mix(df_welt, df_gold)
 
-        section_backtest_gold(df_welt, df_gold, gold_ratio)
+        section_backtest_gold(df_welt, df_gold, gold_ratio, gold_cost)
 
         section_manager_vs_etf(df_welt)
 
