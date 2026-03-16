@@ -297,8 +297,8 @@ def section_UI_heading():
         )
 
         st.markdown("<br>" * 2, unsafe_allow_html=True)
-        st.image(qr_app_path, caption="finchamp.streamlit.app", width=125)
-        st.image(qr_path, caption="www.finchamp.de", width=125)
+        st.image(qr_app_path, caption="finchamp.streamlit.app", width=150)
+        st.image(qr_path, caption="www.finchamp.de", width=150)
         st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
 
     with st.expander("Investitionen", expanded=True):
