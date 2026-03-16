@@ -1022,6 +1022,52 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
         (indem wir langanhaltende Crash-Phasen simulieren), gibt es **keinen rationalen Grund vom 'stumpfen Investieren' abzuweichen.**
         """)
     
+def section_faq():
+    with st.expander("FAQ - Häufig gestellte Fragen", expanded=False):
+        st.markdown("""
+        - **Wie wird der Welt-ETF abgebildet?**
+        Über den *MSCI World Index* (Net Total Return) anstelle eines spezifischen ETFs, da dieser die längste verfügbare Datenhistorie für langfristige Backtests bietet.
+
+        - **Enthält der MSCI World Index (Net Total Return) auch Dividenden?**           
+        Ja. Kursveränderungen, Dividende (nach Quellensteuern), Splits.
+                    
+        - **Ist der MSCI World Index nicht zu US-lastig?**
+        Heute dominieren US-Aktien. Der Index bildet die ca. 1.200 weltweit größten Aktienunternehmen ab. Sobald US-Aktien schwächeln, rücken andere nach.
+                    
+        - **Besteht bei einem Aktienindex Totalverlustrisiko?**
+        Nur theoretisch. Gemäß kybernetischer Systemtheorie ist ein Weltportfolio 'ultrastabil'. Das bedeutet schlicht: Wenn die Kurse stark fallen, kann man ein Schnäppchen schlagen. Das veranlasst Käufer zum Investieren. Das stabilisiert die Kurse und löst erneute Steigerungen aus. Außerdem würden dann Zentralbanken und Regierungen wieder intervenieren.
+                               
+        - **Werden Inflation und Steuern berücksichtigt?**
+        Nein. Steuersätze und Inflation sind zu individuell, um sie hier valide abbilden zu können.
+                    
+        - **Sind Wechselkursrisiken eingerechnet?**
+        Nein, das war ein Abwägen zwischen Korrektheit und Historie. Richtig ist: Kurz- und mittelfristig können Wechselkurse als Turbo oder Bremsklotz für die Euro-Rendite wirken. Da wir jedoch auf den langfristigen Vermögensaufbau abzielen, folgen wir der ökonomischen Theorie, dass sich Währungseffekte über Jahrzehnte weitgehend neutralisieren (Stichwort: Kaufkraftparitätenausgleich).
+
+        - **Warum keine Kryptowährungen oder andere Einzelaktien?**
+        FinChamp konzentriert sich auf die wissenschaftlich fundierte Basisanlage. Einzelwerte sind riskant (siehe das Beispiel *Wirecard*). Ein Welt-ETF vermeidet das durch Diversifikation.
+
+        - **Warum wird Cash statt Anleihen als Reserve genutzt?**
+        Für Privatanleger ist eine Barreserve (Tagesgeld) oft praktischer zu handhaben, bietet sofortige Liquidität und bietet derzeit ähnliche Zinsen wie AAA Staatsanleihen.
+
+        - **Wieso gilt die Analyse primär für den Vermögensaufbau?**
+        Bei Verkaufen (z.B. Rente) gelten andere Regeln für das Risikomanagement. Wenn man in einer Krise verkauft, kann das Kapital zu schnell schmälern.
+
+        - **Woher kommen die Daten?**
+        Die historischen Kurse werden automatisiert über die `yfinance` API von Yahoo Finance bezogen. Als Fallback nehmen wir CSV Daten.
+
+        - **Sind die Berechnungen verlässlich?**
+        Der Code wurde sorgfältig geprüft und getestet. Da Software jedoch nie fehlerfrei ist, laden wir dich ein, die Berechnungen in unserem Repository zu prüfen und Feedback zu geben: [GitHub von Nico](https://github.com/LitsN/finchamp/)
+        
+        - **Warum braucht es Backtest und wie funktoniert das?**
+        Würden wir nur die "letzten 10 Jahre" betrachten, wäre die Aussage irreführend. Man muss den Zeitraum nur leicht verschieben und der Anlageerfolg ändert sich massiv. Deshalb nutzen wir "Rolling Windows": Wir schieben ein 10-Jahres-Zeitfenster durch die gesamte Historie und prüfen, was jeweils rauskam. Nur so lässt sich prüfen, ob taktisches Verhalten besser oder schlechter abschneidet. 
+
+        - **Warum ändern sich die Simulationsergebnisse bei jedem Durchlauf?**
+        Das ist gewollt. Wir nutzen so genannte Markov-Ketten und diskretisierte geometrische Brownsche Bewegung für die Monte-Carlo-Simulation. So generieren wir 'unendlich' viele zufällige aber ähnliche Kursverläufe.
+                    
+        - **Garantieren historische Analysen und Simulationen zukünftigen Anlageerfolg?**
+        Nein. Wir haben auf dieser Seite die Wahrscheinlichkeit aufgezeigt, warum man mit einem kostengünstigen Welt-ETF wenig falsch machen kann.
+        """)
+
 def main():
     if 'var_First_Invest' not in st.session_state:
         st.session_state['var_First_Invest'] = 1000
@@ -1069,6 +1115,8 @@ def main():
             if st.button("Risikoanalysen starten"): 
                 section_backtest_btd(df_welt, res_pct, dip_lim)
                 section_monte_carlo(df_welt, res_pct, dip_lim)
+
+        section_faq()
 
 if __name__ == "__main__":
     main()
