@@ -1026,6 +1026,15 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
 def section_faq():
     with st.expander("FAQ - Häufig gestellte Fragen", expanded=False):
         st.markdown("""
+        - **Werde ich mit diesem Ansatz reich?**
+        Ja. Und nein. Das ist eine Frage des Zeithorizonts und des Verhaltens. Kurz- und mittelfristig stehen die Chancen sehr schlecht. Langfristig bei konsequenter
+                    Ausführung ist es eine mathematische Notwendigkeit. Die Sicht des Autors: Investieren kostet Zeit. Man kann die bessere Anlage suchen 
+                    oder relativ stumpf investieren. Beides gleichzeitig macht man halbherzig. Deshalb: Vollgas bei Qualifikation, Problemlösungskompetenzen und Selbstständigkeit.
+                    Das dadurch verdiente Geld schmeißt der Autor über automatisierte Sparpläne in einen Welt-ETF. 
+
+        - **Werde ich durch diesen Ansatz finanziell unabhängig? Baue ich passives Einkommen auf?**
+        Ja. Und nein. Siehe zuvor.
+                    
         - **Wie wird der Welt-ETF abgebildet?**      
         Über den *MSCI World Index* (Net Total Return) anstelle eines spezifischen ETFs, da dieser die längste verfügbare Datenhistorie für langfristige Backtests bietet.
 
@@ -1051,13 +1060,13 @@ def section_faq():
         Für Privatanleger ist eine Barreserve (Tagesgeld) oft praktischer zu handhaben, bietet sofortige Liquidität und bietet derzeit ähnliche Zinsen wie AAA Staatsanleihen.
 
         - **Wieso gilt die Analyse primär für den Vermögensaufbau?**      
-        Bei Verkaufen (z.B. Rente) gelten andere Regeln für das Risikomanagement. Wenn man in einer Krise verkauft, kann das Kapital zu schnell schmälern.
+        Beim Verkaufen (z.B. Rente) gelten andere Regeln für das Risikomanagement. Verkauft man in einer Krise, kann das Kapital zu schnell aufgebraucht werden. Eine Reserve muss das puffern.
 
         - **Woher kommen die Daten?**      
         Die historischen Kurse werden automatisiert über die `yfinance` API von Yahoo Finance bezogen. Als Fallback nehmen wir CSV Daten.
 
         - **Sind die Berechnungen verlässlich?**      
-        Der Code wurde sorgfältig geprüft und getestet. Da Software jedoch nie fehlerfrei ist, laden wir dich ein, die Berechnungen in unserem Repository zu prüfen und Feedback zu geben: [GitHub von Nico](https://github.com/LitsN/finchamp/)
+        Der Code wurde sorgfältig geprüft und getestet. Da man Fehlerfreiheit nicht beweisen kann, laden wir dich ein, die Berechnungen in unserem Repository zu prüfen und Feedback zu geben: [GitHub von Nico](https://github.com/LitsN/finchamp/)
         
         - **Warum braucht es Backtest und wie funktoniert das?**      
         Würden wir nur die "letzten 10 Jahre" betrachten, wäre die Aussage irreführend. Man muss den Zeitraum nur leicht verschieben und der Anlageerfolg ändert sich massiv. Deshalb nutzen wir "Rolling Windows": Wir schieben ein 10-Jahres-Zeitfenster durch die gesamte Historie und prüfen, was jeweils rauskam. Nur so lässt sich prüfen, ob taktisches Verhalten besser oder schlechter abschneidet. 
@@ -1069,6 +1078,14 @@ def section_faq():
         Nein. Wir haben auf dieser Seite die Wahrscheinlichkeit aufgezeigt, warum man mit einem kostengünstigen Welt-ETF wenig falsch machen kann.
         """)
 
+    st.success("""
+            Was ist wirklich **'smart'? Ein langweiliger Welt-ETF.** Das ist **intellektuell einfach**
+            Aber das **Umsetzen - vor allem diszipliniert Durchalten - ist schwer**.
+            Zu viele Versuchungen begegnen uns täglich. Medien und FinFluencer verzerren die Fakten.
+            Verkäufer wollen uns 'smartere' Dinge aufdrängen. In der Krise blickt man ängstlich ins Depot.
+            Aber die langfristige Erfolgswahrscheinlichkeit mit einem Welt-ETF steht zu unseren Gunsten.
+            Das ist Fakt. Und konnte hoffentlich mit dieser Seite vermittelt werden.
+               """)
 def main():
     if 'var_First_Invest' not in st.session_state:
         st.session_state['var_First_Invest'] = 1000
