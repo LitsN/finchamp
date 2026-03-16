@@ -269,6 +269,7 @@ def section_UI_heading():
     # --- Intro Text ---
     logo_path = os.path.join(base_path, 'logo.png')
     qr_path = os.path.join(base_path, 'qr_code.png')
+    qr_app_path = os.path.join(base_path, 'qr_code_app.png')
     path_favicon = os.path.join(base_path, 'favicon.png')
 
     st.set_page_config(page_title="FinChamp - Welt-ETF kannst du selbst", page_icon=path_favicon, layout="wide")
@@ -295,8 +296,9 @@ def section_UI_heading():
             on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_side")
         )
 
-        st.markdown("<br>" * 3, unsafe_allow_html=True)
-        st.image(qr_path, caption="www.finchamp.de", width=150)
+        st.markdown("<br>" * 2, unsafe_allow_html=True)
+        st.image(qr_app_path, caption="finchamp.streamlit.app", width=125)
+        st.image(qr_path, caption="www.finchamp.de", width=125)
         st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
 
     with st.expander("Investitionen", expanded=True):
