@@ -1,3 +1,10 @@
+"""
+Investment Dashboard
+Author: Nico Litschke
+License: CC BY-NC-SA
+Created: 2026
+Description: Tool to compare the performance and risk of a world portfolio with stock picking, investment reserve, gold, fonds. 
+"""
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -692,11 +699,8 @@ def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
     # year slices
     years_to_test = [1, 3, 5, 10, 20]
 
-    # progress bar for all years
+    # initiate KPI Display
     cols = st.columns(len(years_to_test))
-    progress_bar = st.progress(0)
-    total_steps = sum([len(range(0, len(logR_world) - (y * 252), 21)) for y in years_to_test])
-    current_step = 0
     
     # iterate through the slices 
     for idx, y in enumerate(years_to_test):
@@ -722,11 +726,6 @@ def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
                 
                 diff_pct = (perf_mix / perf_world - 1) * 100
                 results_diffs.append(diff_pct)
-
-                # progress update 
-                current_step += 1
-                if current_step % 10 == 0:
-                    progress_bar.progress(min(current_step / total_steps, 1.0))
             
             # --- KPI Calc and Plot per year ---
             if results_diffs:
@@ -745,8 +744,6 @@ def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
 
         else:
             cols[idx].write(f"{y}J: Zu wenig Daten")
-    
-    progress_bar.empty()
 
     # --- Section Conclusion ---
     st.success(f"""
@@ -871,63 +868,54 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
     # year slices
     years_to_test = [1, 3, 5, 10, 20]
 
-    # progress bar for all years
+    # initiate KPI display
     cols = st.columns(len(years_to_test))
-    progress_bar = st.progress(0)
-    total_steps = sum([len(range(0, len(all_logR) - (y * 252), 21)) for y in years_to_test])
-    current_step = 0
     
     # iterate through the slices 
-    for idx, y in enumerate(years_to_test):
-        window_size = y * 252
-        step = 21
-        
-        results_diffs = [] 
-        
-        start_indices = range(0, len(all_logR) - window_size, step)
-        
-        if len(start_indices) > 0:
-            for start_idx in start_indices:
-                end_idx = start_idx + window_size
-                
-                s_logR = all_logR[start_idx:end_idx]
-                s_months = all_months[start_idx:end_idx]
-                s_prices = all_prices[start_idx:end_idx]
-                s_dates = all_dates[start_idx:end_idx]
-                
-
-                df_base_final = calc_compound_end_value(s_logR, s_months, var_First_Invest, var_Frequent_Invest)
-                
-                df_smart, _, _ = calc_btd(pd.Series(s_logR), pd.Series(s_prices), s_dates, 
-                                          var_First_Invest, var_Frequent_Invest, res_pct, dip_limit_dec)
-                
-                # perforamnce difference
-                diff_pct = (df_smart[-1] / df_base_final - 1) * 100
-                results_diffs.append(diff_pct)
-
-                # progress update 
-                current_step += 1
-                if current_step % 5 == 0:
-                    progress_bar.progress(min(current_step / total_steps, 1.0))
+    with st.spinner("Analysiere historische Zeiträume ..."):
+        for idx, y in enumerate(years_to_test):
+            window_size = y * 252
+            step = 21
             
-            # --- KPI Calc and Plot per year ---
-            if results_diffs:
-                # --- KPI Calculation ---
-                wins = [d for d in results_diffs if d > 0]
-                lose_rate = (1- len(wins) / len(results_diffs)) * 100
-                median_perf = np.median(results_diffs)
+            results_diffs = [] 
+            
+            start_indices = range(0, len(all_logR) - window_size, step)
+            
+            if len(start_indices) > 0:
+                for start_idx in start_indices:
+                    end_idx = start_idx + window_size
+                    
+                    s_logR = all_logR[start_idx:end_idx]
+                    s_months = all_months[start_idx:end_idx]
+                    s_prices = all_prices[start_idx:end_idx]
+                    s_dates = all_dates[start_idx:end_idx]
+                    
+
+                    df_base_final = calc_compound_end_value(s_logR, s_months, var_First_Invest, var_Frequent_Invest)
+                    
+                    df_smart, _, _ = calc_btd(pd.Series(s_logR), pd.Series(s_prices), s_dates, 
+                                            var_First_Invest, var_Frequent_Invest, res_pct, dip_limit_dec)
+                    
+                    # perforamnce difference
+                    diff_pct = (df_smart[-1] / df_base_final - 1) * 100
+                    results_diffs.append(diff_pct)
                 
-                # --- KPI Plot ---
-                cols[idx].metric(
-                    label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
-                    value=f"{median_perf:+.1f} %",
-                    delta=f"In {lose_rate:.0f}% der Zeiträume war 'smart' schlechter",
-                    delta_color="inverse" if lose_rate > 50 else "normal"
-                )
-        else:
-            cols[idx].write(f"{y}J: Zu wenig Daten")
-    
-    progress_bar.empty()
+                # --- KPI Calc and Plot per year ---
+                if results_diffs:
+                    # --- KPI Calculation ---
+                    wins = [d for d in results_diffs if d > 0]
+                    lose_rate = (1- len(wins) / len(results_diffs)) * 100
+                    median_perf = np.median(results_diffs)
+                    
+                    # --- KPI Plot ---
+                    cols[idx].metric(
+                        label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
+                        value=f"{median_perf:+.1f} %",
+                        delta=f"In {lose_rate:.0f}% der Zeiträume war 'smart' schlechter",
+                        delta_color="inverse" if lose_rate > 50 else "normal"
+                    )
+            else:
+                cols[idx].write(f"{y}J: Zu wenig Daten")
 
     # --- Chart Plot ---
     # none
@@ -970,73 +958,62 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
     ## prepare KPI plot
     cols = st.columns(len(years_to_test))
 
-    ## progress bar
-    progress_bar = st.progress(0)
-    total_steps = len(years_to_test) * n_sims
-    current_step = 0
-
     # --- Section Data per time window ---
-    for idx, y in enumerate(years_to_test):
-        days = 252 * y
-        results_diffs = [] # Sammelt die Performance-Unterschiede (%)
-        indices = np.arange(0, days, 21) 
+    with st.spinner("Simuliere Paralleluniversen ..."):
+        for idx, y in enumerate(years_to_test):
+            days = 252 * y
+            results_diffs = [] # Sammelt die Performance-Unterschiede (%)
+            indices = np.arange(0, days, 21) 
 
-        # Regime-Pfade vorab würfeln
-        regimen_matrix = np.zeros((days, n_sims), dtype=int)
-        current_regimen = np.zeros(n_sims, dtype=int)
-        for t in range(1, days):
-            probs = P[current_regimen] 
-            rand_vals = np.random.rand(n_sims)
-            current_regimen = np.where(rand_vals < probs[:, 0], 0, 1)
-            regimen_matrix[t, :] = current_regimen
+            # Regime-Pfade vorab würfeln
+            regimen_matrix = np.zeros((days, n_sims), dtype=int)
+            current_regimen = np.zeros(n_sims, dtype=int)
+            for t in range(1, days):
+                probs = P[current_regimen] 
+                rand_vals = np.random.rand(n_sims)
+                current_regimen = np.where(rand_vals < probs[:, 0], 0, 1)
+                regimen_matrix[t, :] = current_regimen
 
-        # simulate paths within time window 
-        for i in range(n_sims):
-            path_regimes = regimen_matrix[:, i]
-            
-            mus = np.where(path_regimes == 0, mu_normal, mu_crash)
-            sigmas = np.where(path_regimes == 0, sigma_normal, sigma_crash)
-            sim_logR_raw = np.random.normal(mus, sigmas)
-            
-            sim_prices_raw = 100 * np.exp(np.cumsum(sim_logR_raw))
-            sim_logR_ser = pd.Series(sim_logR_raw)
-            sim_prices_ser = pd.Series(sim_prices_raw)
-            sim_dates = pd.date_range(start="2026-01-01", periods=days, freq='B')
+            # simulate paths within time window 
+            for i in range(n_sims):
+                path_regimes = regimen_matrix[:, i]
+                
+                mus = np.where(path_regimes == 0, mu_normal, mu_crash)
+                sigmas = np.where(path_regimes == 0, sigma_normal, sigma_crash)
+                sim_logR_raw = np.random.normal(mus, sigmas)
+                
+                sim_prices_raw = 100 * np.exp(np.cumsum(sim_logR_raw))
+                sim_logR_ser = pd.Series(sim_logR_raw)
+                sim_prices_ser = pd.Series(sim_prices_raw)
+                sim_dates = pd.date_range(start="2026-01-01", periods=days, freq='B')
 
-            # calc base 
-            cum_logR_to_end = sim_logR_raw[::-1].cumsum()[::-1]
-            growth_factors = np.exp(cum_logR_to_end[indices])
-            df_base = (var_First_Invest * np.exp(sim_logR_raw.sum())) + (var_Frequent_Invest * growth_factors).sum()
+                # calc base 
+                cum_logR_to_end = sim_logR_raw[::-1].cumsum()[::-1]
+                growth_factors = np.exp(cum_logR_to_end[indices])
+                df_base = (var_First_Invest * np.exp(sim_logR_raw.sum())) + (var_Frequent_Invest * growth_factors).sum()
 
-            # calc BTD
-            df_smart, _, _ = calc_btd(sim_logR_ser, sim_prices_ser, sim_dates, 
-                var_First_Invest, var_Frequent_Invest, reserve_pct, dip_limit_dec)
-            
-            # perforamnce difference and append
-            diff_pct = (df_smart[-1] / df_base - 1) * 100
-            results_diffs.append(diff_pct)
+                # calc BTD
+                df_smart, _, _ = calc_btd(sim_logR_ser, sim_prices_ser, sim_dates, 
+                    var_First_Invest, var_Frequent_Invest, reserve_pct, dip_limit_dec)
+                
+                # perforamnce difference and append
+                diff_pct = (df_smart[-1] / df_base - 1) * 100
+                results_diffs.append(diff_pct)
 
-            # progress update
-            current_step += 1
-            if current_step % 5 == 0:
-                progress_bar.progress(min(current_step / total_steps, 1.0))
-
-        # --- KPI Calc and Plot per year ---
-        if results_diffs:
-            # --- KPI Calculation ---
-            wins = [d for d in results_diffs if d > 0]
-            lose_rate = (1- (len(wins) / n_sims)) * 100
-            median_perf = np.median(results_diffs)
-            
-            # --- KPI Plot ---
-            cols[idx].metric(
-                label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
-                value=f"{median_perf:+.1f} %",
-                delta=f"In {lose_rate:.0f}% der Universen war 'smart' schlechter",
-                delta_color="inverse" if lose_rate > 50 else "normal"
-            )
-
-    progress_bar.empty()
+            # --- KPI Calc and Plot per year ---
+            if results_diffs:
+                # --- KPI Calculation ---
+                wins = [d for d in results_diffs if d > 0]
+                lose_rate = (1- (len(wins) / n_sims)) * 100
+                median_perf = np.median(results_diffs)
+                
+                # --- KPI Plot ---
+                cols[idx].metric(
+                    label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
+                    value=f"{median_perf:+.1f} %",
+                    delta=f"In {lose_rate:.0f}% der Universen war 'smart' schlechter",
+                    delta_color="inverse" if lose_rate > 50 else "normal"
+                )
 
     # --- Section Conclusion ---
     st.warning("""
@@ -1085,9 +1062,12 @@ def main():
 
         res_pct, dip_lim = section_btd_analysis(df_welt)
 
-        section_backtest_btd(df_welt, res_pct, dip_lim)
-
-        section_monte_carlo(df_welt, res_pct, dip_lim)
+        with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
+            st.write("Moderne Risikoanalyse taktischer Strategien. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
+            
+            if st.button("Risikoanalysen starten"): 
+                section_backtest_btd(df_welt, res_pct, dip_lim)
+                section_monte_carlo(df_welt, res_pct, dip_lim)
 
 if __name__ == "__main__":
     main()
