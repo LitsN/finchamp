@@ -259,7 +259,8 @@ def plot_charts(tAxis, title, df_invest, df_base, df_base_label, df_strategy=Non
         yaxis_tickformat=",.0f",
         title={'text': title, 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
         separators=",.",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+        legend=dict(yanchor="top",y=0.99,xanchor="left",x=0.02),
+        font=dict(size=12)
     )
     
     return fig
