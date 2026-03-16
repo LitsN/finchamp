@@ -267,23 +267,14 @@ def plot_charts(tAxis, title, df_invest, df_base, df_base_label, df_strategy=Non
 
 def section_UI_heading():
     # --- Intro Text ---
+    
     logo_path = os.path.join(base_path, 'logo.png')
     qr_path = os.path.join(base_path, 'qr_code.png')
     qr_app_path = os.path.join(base_path, 'qr_code_app.png')
     path_favicon = os.path.join(base_path, 'favicon.png')
 
     st.set_page_config(page_title="FinChamp - Welt-ETF kannst du selbst", page_icon=path_favicon, layout="wide")
-
-    st.title("Die Kunst des klugen Investierens: Das Weltportfolio")
     
-    st.write("""**Gute Investoren sind gute Risikomanager.** Das Credo dieser Seite ist deshalb so banal wie robust: Privatanleger interessiert, 
-             ob sie am Ende wahrscheinlich **mehr oder weniger Geld im Portemonnaie** haben.""")
-    
-    st.write(f"""
-            Darauf ist diese Seite ausgerichtet. Sie zeigt, warum ein einfacher Welt-ETF solide Rendite bringt und gleichzeitig viele Anlagerisiken inhärent reduziert.
-            
-            Zur Analyse legen wir zuerst unsere **erste Investition** und die **monatliche Sparrate** fest. *Alle Berechnungen und Charts aktualisieren automatisch*.
-            """)
     with st.sidebar:
         st.image(logo_path, width=200)
         st.header("Investitionen")
@@ -300,7 +291,7 @@ def section_UI_heading():
         st.image(qr_path, caption="www.finchamp.de", width=150)
         st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
 
-    with st.expander("Investitionen", expanded=True):
+    with st.expander("Investitionen - Charts und Berechnungen aktualisieren automatisch ", expanded=True):
         col1, col2 = st.columns(2)
         
         with col1:
@@ -315,7 +306,12 @@ def section_UI_heading():
                 on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_main"),
             )
     
+    st.write("""**Gute Investoren sind gute Risikomanager.** Das Credo dieser Seite ist deshalb so banal wie robust: Privatanleger interessiert, 
+             ob sie am Ende wahrscheinlich **mehr oder weniger Geld im Portemonnaie** haben.""")
     
+    st.write(f"""
+            Darauf ist diese Seite ausgerichtet. Sie zeigt, warum ein einfacher Welt-ETF solide Rendite bringt und gleichzeitig viele Anlagerisiken inhärent reduziert.
+            """)
 
     st.write(f"""
             Außerdem wollen wir eine Lücke schließen: Die üblichen Informationsseiten und Blogs über die ETF-Anlage zeigen weder eine geschlossene Darstellung noch eine interaktive (z.B. wie bei Zinsrechnern).
@@ -1095,6 +1091,9 @@ def section_faq():
             Das ist Fakt und konnte hoffentlich mit dieser Seite vermittelt werden.
                """)
 def main():
+
+    st.title("Die Kunst des klugen Investierens: Das Weltportfolio")
+
     if 'var_First_Invest' not in st.session_state:
         st.session_state['var_First_Invest'] = 1000
         st.session_state['var_First_Invest_side'] = 1000
@@ -1104,8 +1103,6 @@ def main():
         st.session_state['var_Frequent_Invest'] = 50
         st.session_state['var_Frequent_Invest_side'] = 50
         st.session_state['var_Frequent_Invest_main'] = 50
-
-    section_UI_heading()
 
     df_welt = get_stock_data(ASSETS["Welt"]["ticker"], 'world_historical.csv')
     df_wdi = get_stock_data(ASSETS["WDI"]["ticker"], 'wdi_historical.csv')     
@@ -1122,27 +1119,29 @@ def main():
 
         section_world_analysis(df_welt)
 
+        section_UI_heading()
+
         c1, c2 = st.columns(2)
         with c1: section_wirecard_analysis(df_welt, df_wdi)
 
         with c2: section_gold_analysis(df_welt, df_gold)
 
-        # gold_ratio, gold_cost = section_etf_gold_mix(df_welt, df_gold)
+        gold_ratio, gold_cost = section_etf_gold_mix(df_welt, df_gold)
 
-        # section_backtest_gold(df_welt, df_gold, gold_ratio, gold_cost)
+        section_backtest_gold(df_welt, df_gold, gold_ratio, gold_cost)
 
-        # section_manager_vs_etf(df_welt)
+        section_manager_vs_etf(df_welt)
 
-        # res_pct, dip_lim = section_btd_analysis(df_welt)
+        res_pct, dip_lim = section_btd_analysis(df_welt)
 
-        # with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
-        #     st.write("Moderne Risikoanalyse der 'smarten' Taktiken. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
+        with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
+            st.write("Moderne Risikoanalyse der 'smarten' Taktiken. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
             
-        #     if st.button("Risikoanalysen starten"): 
-        #         section_backtest_btd(df_welt, res_pct, dip_lim)
-        #         section_monte_carlo(df_welt, res_pct, dip_lim)
+            if st.button("Risikoanalysen starten"): 
+                section_backtest_btd(df_welt, res_pct, dip_lim)
+                section_monte_carlo(df_welt, res_pct, dip_lim)
 
-        # section_faq()
+        section_faq()
 
 if __name__ == "__main__":
     main()
