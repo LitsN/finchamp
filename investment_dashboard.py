@@ -1110,7 +1110,7 @@ def main():
         res_pct, dip_lim = section_btd_analysis(df_welt)
 
         with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
-            st.write("Moderne Risikoanalyse taktischer Strategien. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
+            st.write("Moderne Risikoanalyse der 'smarten' Taktiken. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
             
             if st.button("Risikoanalysen starten"): 
                 section_backtest_btd(df_welt, res_pct, dip_lim)
