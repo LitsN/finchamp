@@ -268,8 +268,9 @@ def section_UI_heading():
     # --- Intro Text ---
     logo_path = os.path.join(base_path, 'logo.png')
     qr_path = os.path.join(base_path, 'qr_code.png')
+    path_favicon = os.path.join(base_path, 'favicon.png')
 
-    st.set_page_config(page_title="FinChamp - Welt-ETF kannst du selbst", layout="wide")
+    st.set_page_config(page_title="FinChamp - Welt-ETF kannst du selbst", page_icon=path_favicon, layout="wide")
 
     st.title("Die Kunst des klugen Investierens: Das Weltportfolio")
     
