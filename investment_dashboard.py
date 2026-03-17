@@ -1030,13 +1030,13 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
 def section_faq():
     with st.expander("FAQ - Häufig gestellte Fragen", expanded=False):
         st.markdown("""
-        - **Werde ich mit diesem Ansatz reich?**
+        - **Werde ich mit diesem Ansatz reich?**      
         Ja. Und nein. Das ist eine Frage des Zeithorizonts und des Verhaltens. Kurz- und mittelfristig stehen die Chancen sehr schlecht. Langfristig bei konsequenter
                     Ausführung ist es eine mathematische Notwendigkeit. Die Sicht des Autors: Investieren kostet Zeit. Man kann die bessere Anlage suchen 
                     oder relativ stumpf investieren. Beides gleichzeitig macht man halbherzig. Deshalb: Vollgas bei Qualifikation, Problemlösungskompetenzen und Selbstständigkeit.
                     Das dadurch verdiente Geld schmeißt der Autor über automatisierte Sparpläne in einen Welt-ETF. 
 
-        - **Werde ich durch diesen Ansatz finanziell unabhängig? Baue ich passives Einkommen auf?**
+        - **Werde ich durch diesen Ansatz finanziell unabhängig? Baue ich passives Einkommen auf?**      
         Ja. Und nein. Siehe zuvor.
                     
         - **Wie wird der Welt-ETF abgebildet?**      
@@ -1060,10 +1060,10 @@ def section_faq():
         - **Warum keine Kryptowährungen oder andere Einzelaktien?**      
         FinChamp konzentriert sich auf die wissenschaftlich fundierte Basisanlage. Einzelwerte sind riskant (siehe das Beispiel *Wirecard*). Ein Welt-ETF vermeidet das durch Diversifikation.
 
-        - **Was sind andere Begriffe für das Vorhalten einer Reserve?**
+        - **Was sind andere Begriffe für das Vorhalten einer Reserve?**      
         In der Finanzwelt und an der Börse gibt es viele Namen für diese Taktik: *Buy the Dip*, *Investitionsreserve (IR)*, *Gegen den Trend investieren*, *günstige Gelegenheiten abpassen*, *Regression zur Mitte*, *antizyklisches* oder *konträres Investieren*, *Bottom Fishing* oder das Ausnutzen von *Marktkorrekturen*. Bekannte Börsenweisheiten nennen es auch *Räumungsverkauf*, *Schnäppchen kaufen*, „Kaufen, wenn die Kanonen donnern“ oder „Kaufen, wenn Blut auf den Straßen fließt“.
 
-        - **Wieso wurde Cost Averaging nicht als eigene Taktik analysiert?**
+        - **Wieso wurde Cost Averaging nicht als eigene Taktik analysiert?**      
         Das *Cost Averaging* (Durchschnittskosteneffekt durch Phaseninvestment) ist letztlich eine Sonderform: Eine Cash-Reserve wird dabei zeitlich gestreckt in Tranchen investiert, anstatt auf ein spezifisches Signal zu warten. Da es sich mathematisch um das schrittweise Auflösen einer Reserve handelt, deckt unsere Analyse zum „Buy the Dip“ die Erfolgswahrscheinlichkeiten dieses Prinzips bereits mit ab. **Wichtig:** Bei einem Sparplan werden neu erwirtschaftete Ersparnisse investiert. Bei der Reserve wird bereits vorhandene Ersparnisse nicht investiert. Das erzeugt Opportunitätskosten.
                     
         - **Warum wird Cash statt Anleihen als Reserve genutzt?**      
