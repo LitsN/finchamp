@@ -56,7 +56,7 @@ def get_stock_data(ticker, csv_label):
         data = yf.Ticker(ticker)
 
         df_api = pd.DataFrame() # Initialisierung
-        df_api = data.history(interval="1d", period="max", end=dt.datetime.now() - pd.Timedelta('2days'), auto_adjust=True)
+        df_api = data.history(interval="1d", period="max", end=dt.datetime.now() - pd.Timedelta('1day'), auto_adjust=True)
    
         if df_api.empty: raise ValueError("API lieferte keine Daten")
         
@@ -1060,6 +1060,12 @@ def section_faq():
         - **Warum keine Kryptowährungen oder andere Einzelaktien?**      
         FinChamp konzentriert sich auf die wissenschaftlich fundierte Basisanlage. Einzelwerte sind riskant (siehe das Beispiel *Wirecard*). Ein Welt-ETF vermeidet das durch Diversifikation.
 
+        - **Was sind andere Begriffe für das Vorhalten einer Reserve?**
+        In der Finanzwelt und an der Börse gibt es viele Namen für diese Taktik: *Buy the Dip*, *Investitionsreserve (IR)*, *Gegen den Trend investieren*, *günstige Gelegenheiten abpassen*, *Regression zur Mitte*, *antizyklisches* oder *konträres Investieren*, *Bottom Fishing* oder das Ausnutzen von *Marktkorrekturen*. Bekannte Börsenweisheiten nennen es auch *Räumungsverkauf*, *Schnäppchen kaufen*, „Kaufen, wenn die Kanonen donnern“ oder „Kaufen, wenn Blut auf den Straßen fließt“.
+
+        - **Wieso wurde Cost Averaging nicht als eigene Taktik analysiert?**
+        Das *Cost Averaging* (Durchschnittskosteneffekt durch Phaseninvestment) ist letztlich eine Sonderform: Eine Cash-Reserve wird dabei zeitlich gestreckt in Tranchen investiert, anstatt auf ein spezifisches Signal zu warten. Da es sich mathematisch um das schrittweise Auflösen einer Reserve handelt, deckt unsere Analyse zum „Buy the Dip“ die Erfolgswahrscheinlichkeiten dieses Prinzips bereits mit ab. **Wichtig:** Bei einem Sparplan werden neu erwirtschaftete Ersparnisse investiert. Bei der Reserve wird bereits vorhandene Ersparnisse nicht investiert. Das erzeugt Opportunitätskosten.
+                    
         - **Warum wird Cash statt Anleihen als Reserve genutzt?**      
         Für Privatanleger ist eine Barreserve (Tagesgeld) oft praktischer zu handhaben, bietet sofortige Liquidität und bietet derzeit ähnliche Zinsen wie AAA Staatsanleihen.
 
