@@ -1113,9 +1113,7 @@ def main():
         st.stop()
 
     else:
-        first_update = df_welt.index.min().strftime('%d.%m.%Y')
-        last_update = df_welt.index.max().strftime('%d.%m.%Y')
-        st.sidebar.caption(f"Daten von: {first_update} - {last_update}")
+        
 
         section_world_analysis(df_welt)
 
@@ -1142,6 +1140,10 @@ def main():
                 section_monte_carlo(df_welt, res_pct, dip_lim)
 
         section_faq()
+
+        first_update = df_welt.index.min().strftime('%d.%m.%Y')
+        last_update = df_welt.index.max().strftime('%d.%m.%Y')
+        st.sidebar.caption(f"Daten von: {first_update} - {last_update}")
 
 if __name__ == "__main__":
     main()
