@@ -406,7 +406,7 @@ def section_world_analysis(df):
 
     c3.metric("Gewinn/Verlust", f"{format_de(profit)} €", delta=f"{((final_value/total_paid)-1)*100:.2f}%")
 
-    c4.metric("Längste Verlustdauer des Index", f"{max_dd_dur_ath} Tage",  delta=f"{max_dd_ath:.1f} %", 
+    c4.metric("Längste Verlustdauer des Index", f"{max_dd_dur_ath/252:.1f} Jahre",  delta=f"{max_dd_ath:.1f} %", 
                 help="Die maximale Zeit und der theoretische Verlust **des Index** nach einem Crash.")
     
     c5.metric("Längste Kapitalverlust", f"{max_dd_dur_invest} Tage", delta=f"{max_dd_invest:.1f} %", 
