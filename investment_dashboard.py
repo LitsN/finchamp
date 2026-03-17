@@ -1074,6 +1074,9 @@ def section_faq():
 
         - **Woher kommen die Daten?**      
         Die historischen Kurse werden automatisiert über die `yfinance` API von Yahoo Finance bezogen. Als Fallback nehmen wir CSV Daten.
+                    
+        - **Wieso sind die Kursdaten veraltet?**
+        Beim Laden wird versucht die neuesten Daten abzurufen. Gelingt das nicht, wird ein Backup verwendet. Diese Backup wird vierteljährlich aktualisiert. Die Analyseergebnisse beeinflusst das kaum.
 
         - **Sind die Berechnungen verlässlich?**      
         Der Code wurde sorgfältig geprüft und getestet. Da man Fehlerfreiheit nicht beweisen kann, laden wir dich ein, die Berechnungen in unserem Repository zu prüfen und Feedback zu geben: [GitHub von Nico](https://github.com/LitsN/finchamp/)
