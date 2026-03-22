@@ -42,7 +42,7 @@ def sync_widgets(target_key, source_key):
     
     st.session_state[other_side_key] = new_val
 
-@st.cache_data(ttl=3600)
+#@st.cache_data(ttl=3600)
 def get_stock_data(ticker, csv_label):
 
     file_path = os.path.join(base_path, csv_label)
@@ -60,7 +60,7 @@ def get_stock_data(ticker, csv_label):
 
         df_api = pd.DataFrame() # Initialisierung
         df_api = data.history(interval="1d", period="max", end=dt.datetime.now() - pd.Timedelta('1day'), auto_adjust=True)
-   
+
         if df_api.empty: raise ValueError("API lieferte keine Daten")
         
         df_api.index = pd.to_datetime(df_api.index)
@@ -315,7 +315,7 @@ def section_UI_heading():
             on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_side")
         )
 
-        st.slider("Anlagedauer:", 10, 45, 45, 5, format="%d Jahre", key="var_invest_duration_side",
+        st.slider("Anlagedauer:", 10, 45, 15, 5, format="%d Jahre", key="var_invest_duration_side",
             on_change=sync_widgets, args=("var_invest_duration", "var_invest_duration_side"))
 
         st.segmented_control("Währung", options=["EUR", "USD"], key="var_currency_mode_side",
@@ -1197,7 +1197,7 @@ def main():
             df_welt = calc_usdeur_df(df_welt, df_usdeur)
             df_gold = calc_usdeur_df(df_gold, df_usdeur)
 
-        invest_duration = dt.datetime.now() - pd.DateOffset(years=st.session_state.var_invest_duration)
+        invest_duration = df_welt.index.max() - pd.DateOffset(years=st.session_state.var_invest_duration)
 
         section_world_analysis(df_welt[df_welt.index >= invest_duration])
 
