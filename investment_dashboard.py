@@ -42,7 +42,7 @@ def sync_widgets(target_key, source_key):
     
     st.session_state[other_side_key] = new_val
 
-#@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def get_stock_data(ticker, csv_label):
 
     file_path = os.path.join(base_path, csv_label)
