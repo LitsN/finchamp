@@ -3,7 +3,7 @@ Investment Dashboard
 Author: Nico Litschke
 License: CC BY-NC-SA
 Created: 2026
-Description: Tool to compare the performance and risk of a world portfolio with stock picking, investment reserve, gold, fonds. 
+Description: Tool to compare the performance and risk of a world portfolio to stock picking, investment reserve, gold, fonds. 
 """
 import streamlit as st
 import pandas as pd
@@ -18,9 +18,11 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 
 # --- Ticker ---
 ASSETS = {
+    #"Welt":{'ticker': '^GDAXI'},
     "Welt":{'ticker': '^990100-USD-STRD'},
     "WDI":{'ticker': 'WDI.HM'},
-    "Gold":{'ticker': 'GC=F'}
+    "Gold":{'ticker': 'GC=F'},
+    "USDEUR":{'ticker': 'USDEUR=X'}
 }
 
 def format_de(n):
@@ -47,6 +49,7 @@ def get_stock_data(ticker, csv_label):
 
     # Load CSV historical data
     df_csv = pd.read_csv(file_path, sep=';', parse_dates=['Date'])
+    if ticker == 'usdeur.csv': df_csv['Close'] = df_csv['Close'].ffill().bfill()
     df_csv.set_index('Date', inplace=True)
     df_csv.index = pd.to_datetime(df_csv.index)
     df_csv['Close'] = pd.to_numeric(df_csv['Close'], errors='coerce')
@@ -75,10 +78,33 @@ def get_stock_data(ticker, csv_label):
     except:
         df = df_csv[['Close']].copy()
     
-    df = df[df.index >= "1978-12-31"]
+    df = df[df.index >= "1980-01-01"]
 
     return pd.DataFrame(df['Close'])
 
+def calc_usdeur_df(df_ticker, df_usdeur):
+    
+    full_index = pd.date_range(start='1980-01-01', end=pd.Timestamp.today(), freq='D')
+
+    df_fx_master = pd.DataFrame(index=full_index)
+
+    df_fx_master = df_fx_master.merge(df_usdeur[['Close']], left_index=True, right_index=True, how='left')
+
+    df_fx_master['Close'] = df_fx_master['Close'].ffill().bfill()
+
+    df = pd.merge(df_ticker[['Close']], df_fx_master[['Close']],
+        left_index=True, right_index=True, how='left', suffixes=('_usd', '_fx'))
+    
+    df['Close'] = df['Close_fx'] * df['Close_usd']
+
+    return pd.DataFrame(df['Close'].copy())
+
+def calc_currency_state():
+    if st.session_state.var_currency_mode == 'EUR':
+        return '€'
+    else:
+        return '$'
+    
 def calc_logReturn(df):
     logR = np.log(df / df.shift(1)).dropna()
     return logR
@@ -237,25 +263,25 @@ def plot_charts(tAxis, title, df_invest, df_base, df_base_label, df_strategy=Non
     # invested
     fig.add_trace(go.Scatter(x=tAxis, y=df_invest, name="investiert", 
                              line=dict(color='#3498db', width=1.5, dash='dot'),
-                             hovertemplate="investiert: %{y:,.0f} €<extra></extra>"))
+                             hovertemplate=f"investiert: %{{y:,.0f}} {calc_currency_state()}<extra></extra>"))
 
     # baseline
     fig.add_trace(go.Scatter(x=tAxis, y=df_base, name=df_base_label, 
                              line=dict(color='#2ecc71', width=1.5),
-                             hovertemplate=f"{df_base_label}: %{{y:,.0f}} €<extra></extra>"))
+                             hovertemplate=f"{df_base_label}: %{{y:,.0f}} {calc_currency_state()}<extra></extra>"))
 
     # comparison
     if df_strategy is not None:
         fig.add_trace(go.Scatter(x=tAxis, y=df_strategy, name=df_comp_label, 
                                 line=dict(color=df_comp_color, width=1.5),
-                                hovertemplate=f"{df_comp_label}: %{{y:,.0f}} €<extra></extra>"))
+                                hovertemplate=f"{df_comp_label}: %{{y:,.0f}} {calc_currency_state()}<extra></extra>"))
     
     # layout
     fig.update_layout(
         template="plotly_dark", 
         hovermode="x unified", 
         xaxis_title="Jahr",
-        yaxis_title="Wert in EUR",
+        yaxis_title=f"Wert in {calc_currency_state()}",
         yaxis_tickformat=",.0f",
         title={'text': title, 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
         separators=",.",
@@ -278,33 +304,51 @@ def section_UI_heading():
     with st.sidebar:
         st.image(logo_path, width=200)
         st.header("Investitionen")
-        st.number_input("Start Investition (€)",  key="var_First_Invest_side", 
+
+        st.number_input(f"Start Investition ({calc_currency_state()})",  key="var_First_Invest_side", 
             min_value=0, step=250,
             on_change=sync_widgets, args=("var_First_Invest", "var_First_Invest_side")
         )
-        st.number_input("Monatliche Sparrate (€)", key="var_Frequent_Invest_side", 
+
+        st.number_input(f"Monatliche Sparrate ({calc_currency_state()})", key="var_Frequent_Invest_side", 
             min_value=0, step=100,
             on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_side")
         )
 
-        st.image(qr_app_path, caption="finchamp.streamlit.app", width=150)
-        st.image(qr_path, caption="www.finchamp.de", width=150)
+        st.slider("Anlagedauer:", 10, 45, 45, 5, format="%d Jahre", key="var_invest_duration_side",
+            on_change=sync_widgets, args=("var_invest_duration", "var_invest_duration_side"))
+
+        st.segmented_control("Währung", options=["EUR", "USD"], key="var_currency_mode_side",
+            on_change=sync_widgets, args=("var_currency_mode", "var_currency_mode_side"))
+        
+        st.image(qr_app_path, caption="finchamp.streamlit.app", width=145)
+        st.image(qr_path, caption='www.finchamp.de', width=145)
         st.sidebar.write(f"© {dt.date.today().year} FinChamp e.V., CC BY-NC-SA")
 
     with st.expander("Investitionen - Charts und Berechnungen aktualisieren automatisch ", expanded=True):
         col1, col2 = st.columns(2)
         
         with col1:
-            st.number_input("Start Investition (€)", key="var_First_Invest_main", 
+            st.number_input(f"Start Investition ({calc_currency_state()})", key="var_First_Invest_main", 
                 min_value=0, step=250,
                 on_change=sync_widgets, args=("var_First_Invest", "var_First_Invest_main")
             )
             
         with col2:
-            st.number_input("Monatliche Sparrate (€)", key="var_Frequent_Invest_main", 
+            st.number_input(f"Monatliche Sparrate ({calc_currency_state()})", key="var_Frequent_Invest_main", 
                 min_value=0, step=100, 
                 on_change=sync_widgets, args=("var_Frequent_Invest", "var_Frequent_Invest_main"),
             )
+
+        c1, c2 = st.columns (2)
+        with c1:
+            st.slider("Dauer:", 10, 45, 45, 5, format="%d Jahre", key="var_invest_duration_main",
+            on_change=sync_widgets, args=("var_invest_duration", "var_invest_duration_main"))
+        
+        with c2:
+            st.segmented_control("Währung", options=["EUR", "USD"], key="var_currency_mode_main",
+                on_change=sync_widgets, args=("var_currency_mode", "var_currency_mode_main"))
+            
     
     st.write("""**Gute Investoren sind gute Risikomanager.** Das Credo dieser Seite ist deshalb so banal wie robust: Privatanleger interessiert, 
              ob sie am Ende wahrscheinlich **mehr oder weniger Geld im Portemonnaie** haben.""")
@@ -400,11 +444,11 @@ def section_world_analysis(df):
     # --- KPI Plot ---
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
-    c1.metric("Gesamt investiert", f"{format_de(total_paid)} €")
+    c1.metric("Gesamt investiert", f"{format_de(total_paid)} {calc_currency_state()}")
 
-    c2.metric("Endvermögen", f"{format_de(final_value)} €")
+    c2.metric("Endvermögen", f"{format_de(final_value)} {calc_currency_state()}")
 
-    c3.metric("Gewinn/Verlust", f"{format_de(profit)} €", delta=f"{((final_value/total_paid)-1)*100:.2f}%")
+    c3.metric("Gewinn/Verlust", f"{format_de(profit)} {calc_currency_state()}", delta=f"{((final_value/total_paid)-1)*100:.2f}%")
 
     c4.metric("Längste Verlustdauer des Index", f"{max_dd_dur_ath/252:.1f} Jahre",  delta=f"{max_dd_ath:.1f} %", 
                 help="Die maximale Zeit und der theoretische Verlust **des Index** nach einem Crash.")
@@ -440,11 +484,14 @@ def section_manager_vs_etf(df):
              Was bedeutet das für unser Endvermögen?
             """)
     
+    ## --- Slider for Fonds Cost ---
+    daily_costs = st.slider("Höhere jährliche Kosten des Fonds in Prozentpunkten:", .5, 5.0, 2.0, .25, format="%f%%") / 100
+    
     # --- Section Data ---
     logR_base = calc_logReturn(df)
     tAxis = df.index[1:]
 
-    daily_costs = np.log(1 - 0.02) / 252
+    daily_costs = np.log(1 - daily_costs) / 252
     logR_fonds = logR_base + daily_costs
 
     df_base = calc_historical_df(logR_base, var_First_Invest, var_Frequent_Invest)
@@ -465,15 +512,15 @@ def section_manager_vs_etf(df):
     # --- KPI Plot ---       
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Gesamt investiert", f"{format_de(total_paid)} €")
+    c1.metric("Gesamt investiert", f"{format_de(total_paid)} {calc_currency_state()}")
     
-    c2.metric("Endvermögen ETF", f"{format_de(final_etf)} €", 
-                delta=f"{format_de(profit_etf)} € Gewinn")
+    c2.metric("Endvermögen ETF", f"{format_de(final_etf)} {calc_currency_state()}", 
+                delta=f"{format_de(profit_etf)} {calc_currency_state()} Gewinn")
     
-    c3.metric("Endvermögen Fonds", f"{format_de(final_fonds)} €", 
-                delta=f"{format_de(profit_fonds)} € Gewinn")
+    c3.metric("Endvermögen Fonds", f"{format_de(final_fonds)} {calc_currency_state()}", 
+                delta=f"{format_de(profit_fonds)} {calc_currency_state()} Gewinn")
     
-    c4.metric("Kosten des Fondsmanagers", f"{format_de(-cost_fonds)} €",
+    c4.metric("Kosten des Fondsmanagers", f"{format_de(-cost_fonds)} {calc_currency_state()}",
             delta=(f"{cost_fonds_pct:.1f} % geringeres Endvermögen" if cost_fonds_pct < 0
                    else f"{cost_fonds_pct:.1f} % höheres Endvermögen"))
 
@@ -488,7 +535,7 @@ def section_manager_vs_etf(df):
         **Gut zu wissen 'Asset-Allokation':** Um diese Kosten zu kompensieren, müsste der Fondsmanager höhere Gewinne erzielen. 
              Wie will er das anstellen, wenn er auch nur auf weltweite Aktien zugreifen kann? 
                 Er müsste geschickt das Geld auf verschiedene Anlageprodukte verteilen. Warum macht das in Zeiten von KI nicht jeder?
-                Absicherung kostet Geld - im Beispiel werden uns **{format_de(cost_fonds)} € in Rechnung** gestellt.
+                Absicherung kostet Geld - im Beispiel werden uns **{format_de(cost_fonds)} {calc_currency_state()} in Rechnung** gestellt.
                 
         Nur **kaufen wir damit im Schnitt weder Sicherheit noch höhere Rendite**. Untersuchungen (SPIVA-Report) zeigen: 
         Über Zeiträume von 15 Jahren schneiden Fondsmanager schlechter ab als der Index.
@@ -658,9 +705,9 @@ def section_etf_gold_mix(df_base, df_gold):
     c1, c2, c3, c4 = st.columns(4)
     
     c1.metric("Anteil Gold", f"{gold_pct} %")
-    c2.metric("Endvermögen ohne Gold", f"{format_de(final_pure)} €")
-    c3.metric("Endvermögen mit Gold", f"{format_de(final_mix)} €")
-    c4.metric("Unterschied", f"{format_de(diff_euro)} €", delta=f"{diff_pct:.1f} %")
+    c2.metric("Endvermögen ohne Gold", f"{format_de(final_pure)} {calc_currency_state()}")
+    c3.metric("Endvermögen mit Gold", f"{format_de(final_mix)} {calc_currency_state()}")
+    c4.metric("Unterschied", f"{format_de(diff_euro)} {calc_currency_state()}", delta=f"{diff_pct:.1f} %")
 
     # --- Chart Plot ---
     fig_mix = plot_charts(tAxis, f'Portfolio-Vergleich: {100-gold_pct}% Welt-ETF / {gold_pct}% Gold', 
@@ -676,7 +723,7 @@ def section_etf_gold_mix(df_base, df_gold):
 
     2. Gold zum Welt-ETF beigemischt schwächt **Kurssteigerungen** ab. 
 
-    3. Eine Versicherung kostet Geld, in diesem Beispiel {format_de(-diff_euro)} €.
+    3. Eine Versicherung kostet Geld, in diesem Beispiel {format_de(-diff_euro)} {calc_currency_state()}.
 
     """)
     
@@ -693,7 +740,7 @@ def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
     st.subheader("Risikoanalyse: Wie hätte sich die Goldbeimischung in der echten Welt geschlagen?")
     st.write(f"Wir testen, wie sich ein Portfolio mit **{gold_ratio*100:.0f}% Gold** im Vergleich zum reinen Welt-ETF über hunderte historische Zeiträume geschlagen hat:")
 
-    st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Median) und **wie oft** 'mit Gold' besser war als 'ohne Gold':")
+    st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Mittel) und **wie oft** 'mit Gold' besser war als 'ohne Gold':")
     
     # --- Section Data ---
     # sync df  and calculate log returns, values for BT
@@ -738,14 +785,14 @@ def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
                 # --- KPI Calculation ---
                 wins = [d for d in results_diffs if d > 0]
                 lose_rate = (1 - len(wins) / len(results_diffs)) * 100
-                median_perf = np.median(results_diffs)
+                mean_perf = np.mean(results_diffs)
                 
                 # --- KPI Plot ---
                 cols[idx].metric(
                     label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
-                    value=f"{median_perf:+.1f} %",
+                    value=f"{mean_perf:+.1f} %",
                     delta=f"Mit Gold war in {lose_rate:.0f} % schlechter",
-                    delta_color="inverse" if lose_rate > 50 else "normal"
+                    delta_color="inverse"
                 )
 
         else:
@@ -764,7 +811,7 @@ def section_btd_analysis(df):
     
     st.write(f"Viele Ratgeber und FinFluencer suggerieren, man könne durch 'smartes' Abpassen von Kursrückgängen den Anlageerfolg verbessern. Machen wir die Probe aufs Exempel:")
     st.write(f"- **'stumpf'** investieren: Wenn wir Geld übrig haben, wird es direkt investiert, z.B. per Sparplan.")
-    st.write(f"- **'smart'** investieren: Wir halten eine Reserve vor, die wir zu günstigen Zeitpunkten investieren, d.h. wenn der Markt um einen gewissen Prozentsatz gefallen ist.")
+    st.write(f"- **'smart'** investieren: Wir halten eine Reserve (2.5% p.a.) vor, die wir zu günstigen Zeitpunkten investieren, d.h. wenn der Markt um einen gewissen Prozentsatz gefallen ist.")
 
     ## --- Slider for BTD calibration ---
     col_a, col_b = st.columns(2)
@@ -774,7 +821,7 @@ def section_btd_analysis(df):
                                 help="Wir teilen dein gesamtes Kapital (Startbetrag + monatliche Sparrate) in den Welt-ETF und eine Reserve für günstige Gelegenheiten. Die Reserve wird mit 2,5% pro Jahr verzinst. Der Regler legt die Größe der Reserve fest.")
         reserve_pct = reserve_pct / 100
     with col_b:
-        dip_limit = st.slider("Kauf-Schwelle für Gelegenheit", 5, 40, 15, 5, format="%d%%",
+        dip_limit = st.slider("Kauf-Schwelle für Gelegenheit", 5, 40, 20, 5, format="%d%%",
             help="Ab wie viel Prozent Kurssturz soll die Reserve investiert werden? "
                 "Eine Krise wird oft ab -20% definiert. Man schaut dabei auf Preisabstamd zum Hoch der letzten 3 Jahre, nicht auf das Allzeithoch."
         )
@@ -808,17 +855,21 @@ def section_btd_analysis(df):
     # --- KPI Plot ---
     c1, c2, c3, c4, c5 = st.columns(5)
     
-    c1.metric("Gesamt investiert", f"{format_de(total_paid)} €")
+    c1.metric("Gesamt investiert", f"{format_de(total_paid)} {calc_currency_state()}")
     
-    c2.metric("Endvermögen stumpf", f"{format_de(final_base)} €", 
-                delta=f"{format_de(profit_base)} € Gewinn")
+    c2.metric("Endvermögen stumpf", f"{format_de(final_base)} {calc_currency_state()}", 
+                delta=f"{format_de(profit_base)} {calc_currency_state()} Gewinn")
     
-    c3.metric("Endvermögen smart", f"{format_de(final_btd)} €", 
-                delta=f"{format_de(profit_btd)} € Gewinn")
+    c3.metric("Endvermögen smart", f"{format_de(final_btd)} {calc_currency_state()}", 
+                delta=f"{format_de(profit_btd)} {calc_currency_state()} Gewinn")
     
     c4.metric("Anzahl der Gelegenheiten", f"{len(arr_buy_dates)}")
     
-    c5.metric("Kosten des Smart-seins", f"{format_de(diff_euro)} €",
+    if diff_euro <= 0:
+        c5.metric("Kosten des Smart-seins", f"{format_de(diff_euro)} {calc_currency_state()}",
+                delta=f"{diff_pct:.1f} % Unterschied", )
+    else:
+        c5.metric("Gewinn des Smart-seins", f"{format_de(diff_euro)} {calc_currency_state()}",
                 delta=f"{diff_pct:.1f} % Unterschied", )
 
     # --- Chart Plot ---
@@ -838,20 +889,23 @@ def section_btd_analysis(df):
     # --- Section Conclusion ---
     if diff < 0:
         st.error(f"""
-        **Ergebnis:** Ganz so 'smart' war die Strategie wohl nicht. Die Kosten belaufen sich auf **{format_de(abs(diff))} €**.
-        **Wie kommt das?** Durch die Reserve ist ein Teil des Geldes für längere Zeit schlechter verzinst. Ein Welt-ETF ist schlicht zu performant, als dass sich der Aufwand einer Reserve lohnen würde.
-        """)
-        st.success(f"""
-                **'Time in the Market beats Timing the Market:**  Je früher und länger wir investieren, desto besser! **Wenn wir Geld übrig haben: Investieren!**
-         """)
-        
-        st.info(f"""
-        **Achtung bei Aussagen über Investmentrenditen:** Meistens werden die Barreserven nicht mitgerechnet, weil die das Ergebnis verschlechtern.
-                Für eine korrekte Einschätzung muss man die ETF-Anlage, Barreserven, Immobilien, Anleihen, Gold, Bitcoin, etc. addieren.
+        **Ergebnis:** Du hast schlechter abgeschnitten.
+        Wie kommt das? Die Reserve wurde über längere Zeit schlechter verzinst. Aber gilt das generell? Starte die Risikoanalyse, um es rauszufinden.
         """)
 
     else:
-        st.success(f"**Ergebnis:** Dein Eingriff hat das Ergebnis verbessert. Das ist eine große Ausnahme. Schreib uns doch, wie du das gemacht hast 😊.")
+        st.warning(f"""
+                  **Ergebnis:** Du hast besser abgeschnitten. 
+                   Wie kommt das? Im Crash hast du bei gleichem Sparbetrag mehr Stück gekauft. Aber gilt das immer? Starte die Risikoanalyse, um es rauszufinden.
+        """)
+    st.success(f"""
+                **'Time in the Market beats Timing the Market:**  Je früher und länger wir investieren, desto besser! **Wenn wir Geld übrig haben: Investieren!**
+         """)
+    
+    st.info(f"""
+        **Achtung bei Aussagen über Investmentrenditen:** Meistens werden die Barreserven nicht mitgerechnet, weil die das Ergebnis verschlechtern.
+                Für eine korrekte Einschätzung muss man die ETF-Anlage, Barreserven, Immobilien, Anleihen, Gold, Bitcoin, etc. addieren. Und auch in die eigene Währung umrechnen.
+        """)
 
     return reserve_pct, dip_limit_dec  
 
@@ -861,7 +915,7 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
     var_Frequent_Invest = st.session_state.var_Frequent_Invest
     st.write("---")
     st.subheader("Risikoanalyse: Wie schlug sich 'smart' in der echten Welt?")
-    st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Median) und **wie oft** 'smart' besser als 'stumpf' war:")
+    st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Mittel) und **wie oft** 'smart' besser als 'stumpf' war:")
     
     # --- Section Data ---
     all_prices = df_full.iloc[:, 0].values
@@ -911,14 +965,14 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
                     # --- KPI Calculation ---
                     wins = [d for d in results_diffs if d > 0]
                     lose_rate = (1- len(wins) / len(results_diffs)) * 100
-                    median_perf = np.median(results_diffs)
+                    mean_perf = np.mean(results_diffs)
                     
                     # --- KPI Plot ---
                     cols[idx].metric(
                         label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
-                        value=f"{median_perf:+.1f} %",
-                        delta=f"In {lose_rate:.0f}% der Zeiträume war 'smart' schlechter",
-                        delta_color="inverse" if lose_rate > 50 else "normal"
+                        value=f"{mean_perf:+.1f} %",
+                        delta=f"In {lose_rate:.0f}% der Zeiträume schlechter!",
+                        delta_color="inverse"
                     )
             else:
                 cols[idx].write(f"{y}J: Zu wenig Daten")
@@ -928,7 +982,7 @@ def section_backtest_btd(df_full, res_pct, dip_limit_dec):
 
     # --- Section Conclusion ---
     st.warning("""
-            **Fazit:** Der **Hype um 'smartes' Investieren ist historisch nicht gerechtfertigt.** Die Erfolgschance durch 'smartes' 
+            **Fazit:** Der **Hype um 'smartes' Investieren ist historisch kaum gerechtfertigt.** Die Erfolgschance durch 'smartes' 
                Verhalten lässt sich von einem Münzwurf kaum unterscheiden - und vermutlich ist der Rest statistisches Rauschen.
                             Wenn wir noch bedenken, dass 'smart' mehr Zeitaufwand und höhere Transaktionskosten bedeutet, ist es so gut wie nie besser.
                 **Es gibt keine rationale Gründe von 'stumpfem Investieren' abzuweichen.**
@@ -943,7 +997,7 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
 
     st.write("---")
     st.subheader("Risikoanalyse: Wie schlägt sich 'smart' in Paralleluniversen?") 
-    st.write(f"Anstatt der historischen Daten erzeugen wir {format_de(n_sims * len(years_to_test))} gänzlich andere Kurse und vergleichen, um **wie viel** (im Median) und **wie oft** 'smart' gegen 'stumpf' gewinnt:")
+    st.write(f"Anstatt der historischen Daten erzeugen wir {format_de(n_sims * len(years_to_test))} gänzlich andere Kurse und vergleichen, um **wie viel** (im Mittel) und **wie oft** 'smart' gegen 'stumpf' gewinnt:")
     
     ## Normal regime
     logR_df = calc_logReturn(df)
@@ -1011,14 +1065,14 @@ def section_monte_carlo(df, reserve_pct, dip_limit_dec):
                 # --- KPI Calculation ---
                 wins = [d for d in results_diffs if d > 0]
                 lose_rate = (1- (len(wins) / n_sims)) * 100
-                median_perf = np.median(results_diffs)
+                mean_perf = np.mean(results_diffs)
                 
                 # --- KPI Plot ---
                 cols[idx].metric(
                     label=f"{y} {'Jahr' if y==1 else 'Jahre'}", 
-                    value=f"{median_perf:+.1f} %",
-                    delta=f"In {lose_rate:.0f}% der Universen war 'smart' schlechter",
-                    delta_color="inverse" if lose_rate > 50 else "normal"
+                    value=f"{mean_perf:+.1f} %",
+                    delta=f"In {lose_rate:.0f}% der Fälle schlechter" if mean_perf <= 0 else f"Nur in {lose_rate-1:.0f}% der Fälle besser!",
+                    delta_color="inverse"
                 )
 
     # --- Section Conclusion ---
@@ -1046,22 +1100,28 @@ def section_faq():
         Ja. Kursveränderungen, Dividende (nach Quellensteuern), Splits.
                     
         - **Ist der MSCI World Index nicht zu US-lastig?**      
-        Heute dominieren US-Aktien. Der Index bildet die ca. 1.200 weltweit größten Aktienunternehmen ab. Sobald US-Aktien schwächeln, rücken andere nach.
+        Heute dominieren US-Aktien. Der Index bildet etwa die 1.300 bis 1.600 weltweit größten Aktienunternehmen ab. Sobald US-Aktien schwächeln, rücken andere nach.
                     
-        - **Besteht bei einem Aktienindex Totalverlustrisiko?**      
-        Nur theoretisch. Gemäß kybernetischer Systemtheorie ist ein Weltportfolio 'ultrastabil'. Das bedeutet schlicht: Wenn die Kurse stark fallen, kann man ein Schnäppchen schlagen. Das veranlasst Käufer zum Investieren. Das stabilisiert die Kurse und löst erneute Steigerungen aus. Außerdem würden dann Zentralbanken und Regierungen wieder intervenieren.
-                               
+        - **Besteht bei einem Welt.ETF Totalverlustrisiko?**      
+        Nur theoretisch. Gemäß kybernetischer Systemtheorie ist ein Weltportfolio 'ultrastabil'. Das bedeutet schlicht: Wenn die Kurse stark fallen, kann man ein Schnäppchen schlagen. Das veranlasst Käufer zum Investieren. Das stabilisiert die Kurse und löst erneute Steigerungen aus. Außerdem würden in solchen Krisen Zentralbanken und Regierungen wieder intervenieren.
+
+        - **Stock Picking - Warum keine Krypto, Einzelaktien, Themen-ETF?**      
+        Jede Einschränkung, ob nach Regionen, Branchen oder Anzahl der Titel, ist mehr oder minder willkürlich. Diese Auswahl erfordert eine Mischung aus hohem Spezialwissen und hellserischen Fähigkeiten. Das Risiko steigt (siehe das Beispiel *Wirecard*). Ein Welt-ETF reduziert das durch Diversifikation. Wer andere Titel prüfen möchte, kann den Code von github branchen und die Tickersymbole ändern.
+
+        - **Sind Environmental, Social, Governance (ESG) sicherer?**      
+        Nein. Siehe Stock Picking.
+                    
+        - **Sind andere Indexe sicherer?**      
+        Nein. Siehe Stock Picking.                    
+                    
         - **Werden Inflation und Steuern berücksichtigt?**      
         Nein. Steuersätze und Inflation sind zu individuell, um sie hier valide abbilden zu können.
                     
-        - **Sind Wechselkursrisiken eingerechnet?**      
-        Nein, das war ein Abwägen zwischen Korrektheit und Historie. Richtig ist: Kurz- und mittelfristig können Wechselkurse als Turbo oder Bremsklotz für die Euro-Rendite wirken. Da wir jedoch auf den langfristigen Vermögensaufbau abzielen, folgen wir der ökonomischen Theorie, dass sich Währungseffekte über Jahrzehnte weitgehend neutralisieren (Stichwort: Kaufkraftparitätenausgleich).
-
-        - **Warum keine Kryptowährungen oder andere Einzelaktien?**      
-        FinChamp konzentriert sich auf die wissenschaftlich fundierte Basisanlage. Einzelwerte sind riskant (siehe das Beispiel *Wirecard*). Ein Welt-ETF vermeidet das durch Diversifikation.
-
+        - **Sind Wechselkurse eingerechnet?**      
+        Ja. Bis 1998 für USD/DM (in EUR konvertiert) mit den historischen Wechselkursen der Bundesbank, danach USD/EUR von Yahoo Finance.
+                    
         - **Was sind andere Begriffe für das Vorhalten einer Reserve?**      
-        In der Finanzwelt und an der Börse gibt es viele Namen für diese Taktik: *Buy the Dip*, *Investitionsreserve (IR)*, *Gegen den Trend investieren*, *günstige Gelegenheiten abpassen*, *Regression zur Mitte*, *antizyklisches* oder *konträres Investieren*, *Bottom Fishing* oder das Ausnutzen von *Marktkorrekturen*. Bekannte Börsenweisheiten nennen es auch *Räumungsverkauf*, *Schnäppchen kaufen*, „Kaufen, wenn die Kanonen donnern“ oder „Kaufen, wenn Blut auf den Straßen fließt“.
+        In der Finanzwelt und an der Börse gibt es viele Namen für diese Taktik: *Buy the Dip*, *Investitionsreserve (IR)*, *Gegen den Trend investieren*, *günstige Gelegenheiten abpassen*, *Regression zur Mitte*, *antizyklisches* oder *konträres Investieren*, *Bottom Fishing* oder das Ausnutzen von *Marktkorrekturen*. Bekannte Börsenweisheiten nennen es auch *Räumungsverkauf*, *Schnäppchen kaufen*, *Kaufen, wenn die Kanonen donnern* oder *Kaufen, wenn Blut auf den Straßen fließt*.
 
         - **Wieso wurde Cost Averaging nicht als eigene Taktik analysiert?**      
         Das *Cost Averaging* (Durchschnittskosteneffekt durch Phaseninvestment) ist letztlich eine Sonderform: Eine Cash-Reserve wird dabei zeitlich gestreckt in Tranchen investiert, anstatt auf ein spezifisches Signal zu warten. Da es sich mathematisch um das schrittweise Auflösen einer Reserve handelt, deckt unsere Analyse zum „Buy the Dip“ die Erfolgswahrscheinlichkeiten dieses Prinzips bereits mit ab. **Wichtig:** Bei einem Sparplan werden neu erwirtschaftete Ersparnisse investiert. Bei der Reserve wird bereits vorhandene Ersparnisse nicht investiert. Das erzeugt Opportunitätskosten.
@@ -1113,18 +1173,33 @@ def main():
         st.session_state['var_Frequent_Invest_side'] = 50
         st.session_state['var_Frequent_Invest_main'] = 50
 
+    if 'var_currency_mode' not in st.session_state:
+        st.session_state['var_currency_mode'] = 'EUR'
+        st.session_state['var_currency_mode_side'] = 'EUR'
+        st.session_state['var_currency_mode_main'] = 'EUR'
+
+    if 'var_invest_duration' not in st.session_state:
+        st.session_state['var_invest_duration'] = 15
+        st.session_state['var_invest_duration_side'] = 15
+        st.session_state['var_invest_duration_main'] = 15
+    
     df_welt = get_stock_data(ASSETS["Welt"]["ticker"], 'world_historical.csv')
     df_wdi = get_stock_data(ASSETS["WDI"]["ticker"], 'wdi_historical.csv')     
     df_gold = get_stock_data(ASSETS["Gold"]["ticker"], 'gold_historical.csv')
+    df_usdeur = get_stock_data(ASSETS["USDEUR"]["ticker"], 'usdeur.csv')
 
-    if df_welt.empty or df_wdi.empty or df_gold.empty:
+    if df_welt.empty or df_wdi.empty or df_gold.empty or df_usdeur.empty:
         st.error(f"Konnte nicht alle Daten laden. Bitte Seite neu laden.")
         st.stop()
 
     else:
-        
+        if st.session_state.var_currency_mode == 'EUR':
+            df_welt = calc_usdeur_df(df_welt, df_usdeur)
+            df_gold = calc_usdeur_df(df_gold, df_usdeur)
 
-        section_world_analysis(df_welt)
+        invest_duration = dt.datetime.now() - pd.DateOffset(years=st.session_state.var_invest_duration)
+
+        section_world_analysis(df_welt[df_welt.index >= invest_duration])
 
         section_UI_heading()
 
@@ -1133,13 +1208,13 @@ def main():
 
         with c2: section_gold_analysis(df_welt, df_gold)
 
-        gold_ratio, gold_cost = section_etf_gold_mix(df_welt, df_gold)
+        gold_ratio, gold_cost = section_etf_gold_mix(df_welt[df_welt.index >= invest_duration], df_gold[df_gold.index >= invest_duration])
 
         section_backtest_gold(df_welt, df_gold, gold_ratio, gold_cost)
 
-        section_manager_vs_etf(df_welt)
+        section_manager_vs_etf(df_welt[df_welt.index >= invest_duration])
 
-        res_pct, dip_lim = section_btd_analysis(df_welt)
+        res_pct, dip_lim = section_btd_analysis(df_welt[df_welt.index >= invest_duration])
 
         with st. expander("Risikoanalyse: Backtest und Simulation", expanded=True):
             st.write("Moderne Risikoanalyse der 'smarten' Taktiken. Diese Simulation ist rechenintensiv und benötigt einen kurzen Moment für die Kalkulation.")
