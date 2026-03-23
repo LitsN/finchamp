@@ -714,18 +714,6 @@ def section_etf_gold_mix(df_base, df_gold):
                           df_invest, df_base, '100% Welt-ETF', df_strategy, '#f1c40f', 'ETF-Gold-Mix')
     
     st.plotly_chart(fig_mix, width='stretch', key="chart_etf_gold_mix")
-
-    # --- Section Conclusion ---
-    st.info(f"""
-    **Was die Goldversicherung bewirkt.** Wir erkennen am Chart drei Dinge sehr schön:
-            
-    1. Gold zum Welt-ETF beigemischt schwächt **Kursrückgänge** ab.
-
-    2. Gold zum Welt-ETF beigemischt schwächt **Kurssteigerungen** ab. 
-
-    3. Eine Versicherung kostet Geld, in diesem Beispiel {format_de(-diff_euro)} {calc_currency_state()}.
-
-    """)
     
     st.warning("""
                **Wie bewerten wir die Diversifikation?**     
@@ -737,8 +725,8 @@ def section_etf_gold_mix(df_base, df_gold):
 
 def section_backtest_gold(df_base, df_gold, gold_ratio, gold_cost):
     # --- Section Header ---
-    st.subheader("Risikoanalyse: Wie hätte sich die Goldbeimischung in der echten Welt geschlagen?")
-    st.write(f"Wir testen, wie sich ein Portfolio mit **{gold_ratio*100:.0f}% Gold** im Vergleich zum reinen Welt-ETF über hunderte historische Zeiträume geschlagen hat:")
+    st.subheader("Risikoanalyse: Wie hat sich Gold in anderen Zeiträumen geschlagen?")
+    st.write(f"Ein einzelnes Chart trügt. Wir testen, wie sich ein Portfolio mit **{gold_ratio*100:.0f}% Gold** im Vergleich zum reinen Welt-ETF über hunderte historische Zeiträume geschlagen hat.")
 
     st.write(f"Anhand der historischen Zeiträume wird berechnet, um **wie viel** (im Mittel) und **wie oft** 'mit Gold' besser war als 'ohne Gold':")
     
