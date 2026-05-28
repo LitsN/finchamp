@@ -9,12 +9,12 @@ with sync_playwright() as p:
     print(f"Öffne {URL}...")
     page.goto(URL, timeout=60000)
     
-    # Falls "Wake up"-Button vorhanden ist, klicken
     try:
-        btn = page.get_by_text("Yes, get this app back up", timeout=10000)
+        btn = page.locator('[data-testid="wakeup-button-viewer"]')
+        btn.wait_for(timeout=10000)
         btn.click()
         print("Wake-up Button geklickt!")
-        time.sleep(30)  # Warten bis App startet
+        time.sleep(30)
     except:
         print("App war schon wach.")
     
